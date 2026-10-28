@@ -1,0 +1,733 @@
+"""Pytest fixtures with small synthetic datasets for testing MargDrishti."""
+
+import csv
+import hashlib
+from pathlib import Path
+from typing import Dict, Generator, Tuple
+import pytest
+
+from marg_drishti.config import PipelineConfig
+
+
+@pytest.fixture
+def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]:
+    """Create a temporary directory structure with small synthetic STATS19 CSV datasets."""
+    raw_official = tmp_path / "data" / "raw" / "official_stats19"
+    raw_paper = tmp_path / "data" / "raw" / "paper_replication"
+    raw_official.mkdir(parents=True, exist_ok=True)
+    raw_paper.mkdir(parents=True, exist_ok=True)
+
+    coll_csv = raw_official / "dft-road-casualty-statistics-collision-last-5-years.csv"
+    veh_csv = raw_official / "dft-road-casualty-statistics-vehicle-last-5-years.csv"
+    cas_csv = raw_official / "dft-road-casualty-statistics-casualty-last-5-years.csv"
+
+    # 1. Synthetic Collisions (5 collisions)
+    coll_rows = [
+        {
+            "collision_index": "202101000001",
+            "collision_year": 2021,
+            "collision_ref_no": "REF001",
+            "location_easting_osgr": 530000,
+            "location_northing_osgr": 180000,
+            "longitude": -0.12,
+            "latitude": 51.50,
+            "police_force": 1,
+            "collision_severity": 1,  # Fatal
+            "number_of_vehicles": 2,
+            "number_of_casualties": 1,
+            "date": "2021-03-15",
+            "day_of_week": 2,  # Monday
+            "time": "14:30",
+            "local_authority_district": 1,
+            "local_authority_ons_district": "E09000001",
+            "local_authority_highway": "E09000001",
+            "local_authority_highway_current": "E09000001",
+            "first_road_class": 3,  # A road
+            "first_road_number": 1,
+            "road_type": 6,  # Single carriageway
+            "speed_limit": 30,
+            "junction_detail_historic": 0,
+            "junction_detail": 0,
+            "junction_control": 4,
+            "second_road_class": -1,
+            "second_road_number": -1,
+            "pedestrian_crossing_human_control_historic": 0,
+            "pedestrian_crossing_physical_facilities_historic": 0,
+            "pedestrian_crossing": 0,
+            "light_conditions": 1,  # Daylight
+            "weather_conditions": 1,  # Fine
+            "road_surface_conditions": 1,  # Dry
+            "special_conditions_at_site": 0,
+            "carriageway_hazards_historic": 0,
+            "carriageway_hazards": 0,
+            "urban_or_rural_area": 1,  # Urban
+            "did_police_officer_attend_scene_of_accident": 1,
+            "trunk_road_flag": 2,
+            "lsoa_of_accident_location": "E01000001",
+            "enhanced_severity_collision": 1,
+            "collision_injury_based": 1,
+            "collision_adjusted_severity_serious": 0.0,
+            "collision_adjusted_severity_slight": 0.0,
+        },
+        {
+            "collision_index": "202101000002",
+            "collision_year": 2021,
+            "collision_ref_no": "REF002",
+            "location_easting_osgr": 531000,
+            "location_northing_osgr": 181000,
+            "longitude": -0.11,
+            "latitude": 51.51,
+            "police_force": 1,
+            "collision_severity": 2,  # Serious
+            "number_of_vehicles": 1,
+            "number_of_casualties": 1,
+            "date": "2021-04-10",
+            "day_of_week": 7,  # Saturday
+            "time": "22:15",
+            "local_authority_district": 1,
+            "local_authority_ons_district": "E09000001",
+            "local_authority_highway": "E09000001",
+            "local_authority_highway_current": "E09000001",
+            "first_road_class": 1,  # Motorway
+            "first_road_number": 4,
+            "road_type": 3,  # Dual carriageway
+            "speed_limit": 70,
+            "junction_detail_historic": 0,
+            "junction_detail": 0,
+            "junction_control": -1,
+            "second_road_class": -1,
+            "second_road_number": -1,
+            "pedestrian_crossing_human_control_historic": 0,
+            "pedestrian_crossing_physical_facilities_historic": 0,
+            "pedestrian_crossing": 0,
+            "light_conditions": 4,  # Darkness - lit
+            "weather_conditions": 2,  # Raining
+            "road_surface_conditions": 2,  # Wet
+            "special_conditions_at_site": 0,
+            "carriageway_hazards_historic": 0,
+            "carriageway_hazards": 0,
+            "urban_or_rural_area": 2,  # Rural
+            "did_police_officer_attend_scene_of_accident": 1,
+            "trunk_road_flag": 1,
+            "lsoa_of_accident_location": "E01000002",
+            "enhanced_severity_collision": 2,
+            "collision_injury_based": 1,
+            "collision_adjusted_severity_serious": 1.0,
+            "collision_adjusted_severity_slight": 0.0,
+        },
+        {
+            "collision_index": "202101000003",
+            "collision_year": 2021,
+            "collision_ref_no": "REF003",
+            "location_easting_osgr": 532000,
+            "location_northing_osgr": 182000,
+            "longitude": -0.10,
+            "latitude": 51.52,
+            "police_force": 1,
+            "collision_severity": 3,  # Slight
+            "number_of_vehicles": 3,
+            "number_of_casualties": 2,
+            "date": "2021-05-20",
+            "day_of_week": 5,  # Thursday
+            "time": "08:45",
+            "local_authority_district": 1,
+            "local_authority_ons_district": "E09000001",
+            "local_authority_highway": "E09000001",
+            "local_authority_highway_current": "E09000001",
+            "first_road_class": 4,  # B road
+            "first_road_number": 200,
+            "road_type": 1,  # Roundabout
+            "speed_limit": -1,  # Unknown sentinel
+            "junction_detail_historic": 1,
+            "junction_detail": 1,
+            "junction_control": 2,
+            "second_road_class": 4,
+            "second_road_number": 201,
+            "pedestrian_crossing_human_control_historic": 0,
+            "pedestrian_crossing_physical_facilities_historic": 0,
+            "pedestrian_crossing": 0,
+            "light_conditions": 1,
+            "weather_conditions": 1,
+            "road_surface_conditions": 1,
+            "special_conditions_at_site": 0,
+            "carriageway_hazards_historic": 0,
+            "carriageway_hazards": 0,
+            "urban_or_rural_area": 1,
+            "did_police_officer_attend_scene_of_accident": 2,
+            "trunk_road_flag": 2,
+            "lsoa_of_accident_location": "E01000003",
+            "enhanced_severity_collision": 3,
+            "collision_injury_based": 0,
+            "collision_adjusted_severity_serious": 0.0,
+            "collision_adjusted_severity_slight": 1.0,
+        },
+        {
+            "collision_index": "202201000004",
+            "collision_year": 2022,
+            "collision_ref_no": "REF004",
+            "location_easting_osgr": 533000,
+            "location_northing_osgr": 183000,
+            "longitude": -0.09,
+            "latitude": 51.53,
+            "police_force": 2,
+            "collision_severity": 3,  # Slight
+            "number_of_vehicles": 1,
+            "number_of_casualties": 1,
+            "date": "2022-07-04",
+            "day_of_week": 2,
+            "time": "12:00",
+            "local_authority_district": 2,
+            "local_authority_ons_district": "E09000002",
+            "local_authority_highway": "E09000002",
+            "local_authority_highway_current": "E09000002",
+            "first_road_class": 6,  # Unclassified
+            "first_road_number": 0,
+            "road_type": 6,
+            "speed_limit": 20,
+            "junction_detail_historic": 0,
+            "junction_detail": 0,
+            "junction_control": 4,
+            "second_road_class": -1,
+            "second_road_number": -1,
+            "pedestrian_crossing_human_control_historic": 0,
+            "pedestrian_crossing_physical_facilities_historic": 0,
+            "pedestrian_crossing": 0,
+            "light_conditions": 1,
+            "weather_conditions": 1,
+            "road_surface_conditions": 1,
+            "special_conditions_at_site": 0,
+            "carriageway_hazards_historic": 0,
+            "carriageway_hazards": 0,
+            "urban_or_rural_area": 1,
+            "did_police_officer_attend_scene_of_accident": 1,
+            "trunk_road_flag": 2,
+            "lsoa_of_accident_location": "E01000004",
+            "enhanced_severity_collision": 3,
+            "collision_injury_based": 0,
+            "collision_adjusted_severity_serious": 0.0,
+            "collision_adjusted_severity_slight": 1.0,
+        },
+        {
+            "collision_index": "202301000005",
+            "collision_year": 2023,
+            "collision_ref_no": "REF005",
+            "location_easting_osgr": 534000,
+            "location_northing_osgr": 184000,
+            "longitude": -0.08,
+            "latitude": 51.54,
+            "police_force": 2,
+            "collision_severity": 2,  # Serious
+            "number_of_vehicles": 1,
+            "number_of_casualties": 1,
+            "date": "2023-11-12",
+            "day_of_week": 1,  # Sunday
+            "time": "19:30",
+            "local_authority_district": 2,
+            "local_authority_ons_district": "E09000002",
+            "local_authority_highway": "E09000002",
+            "local_authority_highway_current": "E09000002",
+            "first_road_class": 3,
+            "first_road_number": 10,
+            "road_type": 6,
+            "speed_limit": 40,
+            "junction_detail_historic": 0,
+            "junction_detail": 0,
+            "junction_control": 4,
+            "second_road_class": -1,
+            "second_road_number": -1,
+            "pedestrian_crossing_human_control_historic": 0,
+            "pedestrian_crossing_physical_facilities_historic": 0,
+            "pedestrian_crossing": 0,
+            "light_conditions": 6,  # Darkness - no lights
+            "weather_conditions": 7,  # Fog
+            "road_surface_conditions": 4,  # Ice
+            "special_conditions_at_site": 0,
+            "carriageway_hazards_historic": 0,
+            "carriageway_hazards": 0,
+            "urban_or_rural_area": 2,
+            "did_police_officer_attend_scene_of_accident": 1,
+            "trunk_road_flag": 2,
+            "lsoa_of_accident_location": "E01000005",
+            "enhanced_severity_collision": 2,
+            "collision_injury_based": 1,
+            "collision_adjusted_severity_serious": 1.0,
+            "collision_adjusted_severity_slight": 0.0,
+        },
+    ]
+
+    with open(coll_csv, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=list(coll_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(coll_rows)
+
+    # 2. Synthetic Vehicles (8 vehicles mapping to the 5 collisions)
+    veh_rows = [
+        # Collision 1 (2 vehicles: Car + Motorcycle)
+        {
+            "collision_index": "202101000001",
+            "collision_year": 2021,
+            "collision_ref_no": "REF001",
+            "vehicle_reference": 1,
+            "vehicle_type": 9,  # Car
+            "towing_and_articulation": 0,
+            "vehicle_manoeuvre_historic": 0,
+            "vehicle_manoeuvre": 18,
+            "vehicle_direction_from": 1,
+            "vehicle_direction_to": 5,
+            "vehicle_location_restricted_lane_historic": 0,
+            "vehicle_location_restricted_lane": 0,
+            "junction_location": 0,
+            "skidding_and_overturning": 0,
+            "hit_object_in_carriageway": 0,
+            "vehicle_leaving_carriageway": 0,
+            "hit_object_off_carriageway": 0,
+            "first_point_of_impact": 1,
+            "vehicle_left_hand_drive": 1,
+            "journey_purpose_of_driver_historic": 0,
+            "journey_purpose_of_driver": 6,
+            "sex_of_driver": 1,  # Male
+            "age_of_driver": 45,
+            "age_band_of_driver": 7,
+            "engine_capacity_cc": 1600,
+            "propulsion_code": 1,
+            "age_of_vehicle": 5,
+            "generic_make_model": "FORD FOCUS",
+            "driver_imd_decile": 5,
+            "lsoa_of_driver": "E01000001",
+            "escooter_flag": 0,
+            "driver_distance_banding": 1,
+        },
+        {
+            "collision_index": "202101000001",
+            "collision_year": 2021,
+            "collision_ref_no": "REF001",
+            "vehicle_reference": 2,
+            "vehicle_type": 5,  # Motorcycle >500cc
+            "towing_and_articulation": 0,
+            "vehicle_manoeuvre_historic": 0,
+            "vehicle_manoeuvre": 18,
+            "vehicle_direction_from": 5,
+            "vehicle_direction_to": 1,
+            "vehicle_location_restricted_lane_historic": 0,
+            "vehicle_location_restricted_lane": 0,
+            "junction_location": 0,
+            "skidding_and_overturning": 1,
+            "hit_object_in_carriageway": 0,
+            "vehicle_leaving_carriageway": 1,
+            "hit_object_off_carriageway": 4,
+            "first_point_of_impact": 1,
+            "vehicle_left_hand_drive": 1,
+            "journey_purpose_of_driver_historic": 0,
+            "journey_purpose_of_driver": 6,
+            "sex_of_driver": 1,
+            "age_of_driver": 22,  # Young driver
+            "age_band_of_driver": 4,
+            "engine_capacity_cc": 650,
+            "propulsion_code": 1,
+            "age_of_vehicle": 2,
+            "generic_make_model": "YAMAHA MT-07",
+            "driver_imd_decile": 4,
+            "lsoa_of_driver": "E01000002",
+            "escooter_flag": 0,
+            "driver_distance_banding": 1,
+        },
+        # Collision 2 (1 vehicle: HGV)
+        {
+            "collision_index": "202101000002",
+            "collision_year": 2021,
+            "collision_ref_no": "REF002",
+            "vehicle_reference": 1,
+            "vehicle_type": 20,  # HGV >3.5t
+            "towing_and_articulation": 1,
+            "vehicle_manoeuvre_historic": 0,
+            "vehicle_manoeuvre": 18,
+            "vehicle_direction_from": 2,
+            "vehicle_direction_to": 6,
+            "vehicle_location_restricted_lane_historic": 0,
+            "vehicle_location_restricted_lane": 0,
+            "junction_location": 0,
+            "skidding_and_overturning": 0,
+            "hit_object_in_carriageway": 0,
+            "vehicle_leaving_carriageway": 0,
+            "hit_object_off_carriageway": 0,
+            "first_point_of_impact": 1,
+            "vehicle_left_hand_drive": 1,
+            "journey_purpose_of_driver_historic": 0,
+            "journey_purpose_of_driver": 1,
+            "sex_of_driver": 1,
+            "age_of_driver": 52,
+            "age_band_of_driver": 8,
+            "engine_capacity_cc": 12000,
+            "propulsion_code": 2,
+            "age_of_vehicle": 4,
+            "generic_make_model": "SCANIA R450",
+            "driver_imd_decile": 6,
+            "lsoa_of_driver": "E01000003",
+            "escooter_flag": 0,
+            "driver_distance_banding": 2,
+        },
+        # Collision 3 (3 vehicles: Car, Van, Pedal cycle)
+        {
+            "collision_index": "202101000003",
+            "collision_year": 2021,
+            "collision_ref_no": "REF003",
+            "vehicle_reference": 1,
+            "vehicle_type": 9,  # Car
+            "towing_and_articulation": 0,
+            "vehicle_manoeuvre_historic": 0,
+            "vehicle_manoeuvre": 18,
+            "vehicle_direction_from": 3,
+            "vehicle_direction_to": 7,
+            "vehicle_location_restricted_lane_historic": 0,
+            "vehicle_location_restricted_lane": 0,
+            "junction_location": 1,
+            "skidding_and_overturning": 0,
+            "hit_object_in_carriageway": 0,
+            "vehicle_leaving_carriageway": 0,
+            "hit_object_off_carriageway": 0,
+            "first_point_of_impact": 3,
+            "vehicle_left_hand_drive": 1,
+            "journey_purpose_of_driver_historic": 0,
+            "journey_purpose_of_driver": 6,
+            "sex_of_driver": 2,  # Female
+            "age_of_driver": 34,
+            "age_band_of_driver": 6,
+            "engine_capacity_cc": 1400,
+            "propulsion_code": 1,
+            "age_of_vehicle": 8,
+            "generic_make_model": "VW GOLF",
+            "driver_imd_decile": 7,
+            "lsoa_of_driver": "E01000004",
+            "escooter_flag": 0,
+            "driver_distance_banding": 1,
+        },
+        {
+            "collision_index": "202101000003",
+            "collision_year": 2021,
+            "collision_ref_no": "REF003",
+            "vehicle_reference": 2,
+            "vehicle_type": 19,  # Van / Goods <=3.5t
+            "towing_and_articulation": 0,
+            "vehicle_manoeuvre_historic": 0,
+            "vehicle_manoeuvre": 18,
+            "vehicle_direction_from": 7,
+            "vehicle_direction_to": 3,
+            "vehicle_location_restricted_lane_historic": 0,
+            "vehicle_location_restricted_lane": 0,
+            "junction_location": 1,
+            "skidding_and_overturning": 0,
+            "hit_object_in_carriageway": 0,
+            "vehicle_leaving_carriageway": 0,
+            "hit_object_off_carriageway": 0,
+            "first_point_of_impact": 1,
+            "vehicle_left_hand_drive": 1,
+            "journey_purpose_of_driver_historic": 0,
+            "journey_purpose_of_driver": 1,
+            "sex_of_driver": 1,
+            "age_of_driver": 29,
+            "age_band_of_driver": 5,
+            "engine_capacity_cc": 2000,
+            "propulsion_code": 2,
+            "age_of_vehicle": 3,
+            "generic_make_model": "FORD TRANSIT",
+            "driver_imd_decile": 5,
+            "lsoa_of_driver": "E01000005",
+            "escooter_flag": 0,
+            "driver_distance_banding": 1,
+        },
+        {
+            "collision_index": "202101000003",
+            "collision_year": 2021,
+            "collision_ref_no": "REF003",
+            "vehicle_reference": 3,
+            "vehicle_type": 1,  # Pedal cycle
+            "towing_and_articulation": 0,
+            "vehicle_manoeuvre_historic": 0,
+            "vehicle_manoeuvre": 18,
+            "vehicle_direction_from": 3,
+            "vehicle_direction_to": 7,
+            "vehicle_location_restricted_lane_historic": 0,
+            "vehicle_location_restricted_lane": 0,
+            "junction_location": 1,
+            "skidding_and_overturning": 0,
+            "hit_object_in_carriageway": 0,
+            "vehicle_leaving_carriageway": 0,
+            "hit_object_off_carriageway": 0,
+            "first_point_of_impact": 2,
+            "vehicle_left_hand_drive": 1,
+            "journey_purpose_of_driver_historic": 0,
+            "journey_purpose_of_driver": 6,
+            "sex_of_driver": 1,
+            "age_of_driver": 72,  # Older cyclist
+            "age_band_of_driver": 10,
+            "engine_capacity_cc": -1,
+            "propulsion_code": -1,
+            "age_of_vehicle": -1,
+            "generic_make_model": "TREK ROAD",
+            "driver_imd_decile": 8,
+            "lsoa_of_driver": "E01000006",
+            "escooter_flag": 0,
+            "driver_distance_banding": 1,
+        },
+        # Collision 4 (1 vehicle: Car)
+        {
+            "collision_index": "202201000004",
+            "collision_year": 2022,
+            "collision_ref_no": "REF004",
+            "vehicle_reference": 1,
+            "vehicle_type": 9,
+            "towing_and_articulation": 0,
+            "vehicle_manoeuvre_historic": 0,
+            "vehicle_manoeuvre": 18,
+            "vehicle_direction_from": 4,
+            "vehicle_direction_to": 8,
+            "vehicle_location_restricted_lane_historic": 0,
+            "vehicle_location_restricted_lane": 0,
+            "junction_location": 0,
+            "skidding_and_overturning": 0,
+            "hit_object_in_carriageway": 0,
+            "vehicle_leaving_carriageway": 0,
+            "hit_object_off_carriageway": 0,
+            "first_point_of_impact": 1,
+            "vehicle_left_hand_drive": 1,
+            "journey_purpose_of_driver_historic": 0,
+            "journey_purpose_of_driver": 6,
+            "sex_of_driver": 2,
+            "age_of_driver": 60,
+            "age_band_of_driver": 9,
+            "engine_capacity_cc": 1200,
+            "propulsion_code": 1,
+            "age_of_vehicle": 10,
+            "generic_make_model": "NISSAN MICRA",
+            "driver_imd_decile": 3,
+            "lsoa_of_driver": "E01000007",
+            "escooter_flag": 0,
+            "driver_distance_banding": 1,
+        },
+        # Collision 5 (1 vehicle: Bus)
+        {
+            "collision_index": "202301000005",
+            "collision_year": 2023,
+            "collision_ref_no": "REF005",
+            "vehicle_reference": 1,
+            "vehicle_type": 11,  # Bus / Coach
+            "towing_and_articulation": 0,
+            "vehicle_manoeuvre_historic": 0,
+            "vehicle_manoeuvre": 18,
+            "vehicle_direction_from": 1,
+            "vehicle_direction_to": 5,
+            "vehicle_location_restricted_lane_historic": 0,
+            "vehicle_location_restricted_lane": 0,
+            "junction_location": 0,
+            "skidding_and_overturning": 0,
+            "hit_object_in_carriageway": 0,
+            "vehicle_leaving_carriageway": 0,
+            "hit_object_off_carriageway": 0,
+            "first_point_of_impact": 1,
+            "vehicle_left_hand_drive": 1,
+            "journey_purpose_of_driver_historic": 0,
+            "journey_purpose_of_driver": 1,
+            "sex_of_driver": 1,
+            "age_of_driver": -1,  # Unknown age
+            "age_band_of_driver": -1,
+            "engine_capacity_cc": 6700,
+            "propulsion_code": 2,
+            "age_of_vehicle": 6,
+            "generic_make_model": "ALEXANDER DENNIS",
+            "driver_imd_decile": -1,
+            "lsoa_of_driver": "UNKNOWN",
+            "escooter_flag": 0,
+            "driver_distance_banding": -1,
+        },
+    ]
+
+    with open(veh_csv, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=list(veh_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(veh_rows)
+
+    # 3. Synthetic Casualties (6 casualties mapping to the 5 collisions)
+    cas_rows = [
+        # Collision 1: 1 Fatal casualty (motorcyclist rider)
+        {
+            "collision_index": "202101000001",
+            "collision_year": 2021,
+            "collision_ref_no": "REF001",
+            "vehicle_reference": 2,
+            "casualty_reference": 1,
+            "casualty_class": 1,  # Driver or rider
+            "sex_of_casualty": 1,
+            "age_of_casualty": 22,
+            "age_band_of_casualty": 4,
+            "casualty_severity": 1,  # Fatal
+            "pedestrian_location": 0,
+            "pedestrian_movement": 0,
+            "car_passenger": 0,
+            "bus_or_coach_passenger": 0,
+            "pedestrian_road_maintenance_worker": 0,
+            "casualty_type": 5,  # Motorcycle
+            "casualty_imd_decile": 4,
+            "lsoa_of_casualty": "E01000002",
+            "enhanced_casualty_severity": 1,
+            "casualty_injury_based": 1,
+            "casualty_adjusted_severity_serious": 0.0,
+            "casualty_adjusted_severity_slight": 0.0,
+            "casualty_distance_banding": 1,
+            "escooter_flag": 0,
+        },
+        # Collision 2: 1 Serious casualty (HGV driver)
+        {
+            "collision_index": "202101000002",
+            "collision_year": 2021,
+            "collision_ref_no": "REF002",
+            "vehicle_reference": 1,
+            "casualty_reference": 1,
+            "casualty_class": 1,
+            "sex_of_casualty": 1,
+            "age_of_casualty": 52,
+            "age_band_of_casualty": 8,
+            "casualty_severity": 2,  # Serious
+            "pedestrian_location": 0,
+            "pedestrian_movement": 0,
+            "car_passenger": 0,
+            "bus_or_coach_passenger": 0,
+            "pedestrian_road_maintenance_worker": 0,
+            "casualty_type": 20,
+            "casualty_imd_decile": 6,
+            "lsoa_of_casualty": "E01000003",
+            "enhanced_casualty_severity": 2,
+            "casualty_injury_based": 1,
+            "casualty_adjusted_severity_serious": 1.0,
+            "casualty_adjusted_severity_slight": 0.0,
+            "casualty_distance_banding": 2,
+            "escooter_flag": 0,
+        },
+        # Collision 3: 2 Slight casualties (Cyclist + Car passenger)
+        {
+            "collision_index": "202101000003",
+            "collision_year": 2021,
+            "collision_ref_no": "REF003",
+            "vehicle_reference": 3,
+            "casualty_reference": 1,
+            "casualty_class": 1,
+            "sex_of_casualty": 1,
+            "age_of_casualty": 72,
+            "age_band_of_casualty": 10,
+            "casualty_severity": 3,  # Slight
+            "pedestrian_location": 0,
+            "pedestrian_movement": 0,
+            "car_passenger": 0,
+            "bus_or_coach_passenger": 0,
+            "pedestrian_road_maintenance_worker": 0,
+            "casualty_type": 1,  # Cyclist
+            "casualty_imd_decile": 8,
+            "lsoa_of_casualty": "E01000006",
+            "enhanced_casualty_severity": 3,
+            "casualty_injury_based": 0,
+            "casualty_adjusted_severity_serious": 0.0,
+            "casualty_adjusted_severity_slight": 1.0,
+            "casualty_distance_banding": 1,
+            "escooter_flag": 0,
+        },
+        {
+            "collision_index": "202101000003",
+            "collision_year": 2021,
+            "collision_ref_no": "REF003",
+            "vehicle_reference": 1,
+            "casualty_reference": 2,
+            "casualty_class": 2,  # Passenger
+            "sex_of_casualty": 2,
+            "age_of_casualty": 12,  # Child
+            "age_band_of_casualty": 2,
+            "casualty_severity": 3,  # Slight
+            "pedestrian_location": 0,
+            "pedestrian_movement": 0,
+            "car_passenger": 1,
+            "bus_or_coach_passenger": 0,
+            "pedestrian_road_maintenance_worker": 0,
+            "casualty_type": 9,
+            "casualty_imd_decile": 7,
+            "lsoa_of_casualty": "E01000004",
+            "enhanced_casualty_severity": 3,
+            "casualty_injury_based": 0,
+            "casualty_adjusted_severity_serious": 0.0,
+            "casualty_adjusted_severity_slight": 1.0,
+            "casualty_distance_banding": 1,
+            "escooter_flag": 0,
+        },
+        # Collision 4: 1 Slight casualty (Pedestrian)
+        {
+            "collision_index": "202201000004",
+            "collision_year": 2022,
+            "collision_ref_no": "REF004",
+            "vehicle_reference": 1,
+            "casualty_reference": 1,
+            "casualty_class": 3,  # Pedestrian
+            "sex_of_casualty": 2,
+            "age_of_casualty": 30,
+            "age_band_of_casualty": 6,
+            "casualty_severity": 3,  # Slight
+            "pedestrian_location": 1,
+            "pedestrian_movement": 1,
+            "car_passenger": 0,
+            "bus_or_coach_passenger": 0,
+            "pedestrian_road_maintenance_worker": 0,
+            "casualty_type": 0,  # Pedestrian
+            "casualty_imd_decile": 3,
+            "lsoa_of_casualty": "E01000007",
+            "enhanced_casualty_severity": 3,
+            "casualty_injury_based": 0,
+            "casualty_adjusted_severity_serious": 0.0,
+            "casualty_adjusted_severity_slight": 1.0,
+            "casualty_distance_banding": 1,
+            "escooter_flag": 0,
+        },
+        # Collision 5: 1 Serious casualty (Bus passenger)
+        {
+            "collision_index": "202301000005",
+            "collision_year": 2023,
+            "collision_ref_no": "REF005",
+            "vehicle_reference": 1,
+            "casualty_reference": 1,
+            "casualty_class": 2,  # Passenger
+            "sex_of_casualty": 1,
+            "age_of_casualty": 68,  # Elderly
+            "age_band_of_casualty": 10,
+            "casualty_severity": 2,  # Serious
+            "pedestrian_location": 0,
+            "pedestrian_movement": 0,
+            "car_passenger": 0,
+            "bus_or_coach_passenger": 1,
+            "pedestrian_road_maintenance_worker": 0,
+            "casualty_type": 11,
+            "casualty_imd_decile": 5,
+            "lsoa_of_casualty": "E01000008",
+            "enhanced_casualty_severity": 2,
+            "casualty_injury_based": 1,
+            "casualty_adjusted_severity_serious": 1.0,
+            "casualty_adjusted_severity_slight": 0.0,
+            "casualty_distance_banding": 1,
+            "escooter_flag": 0,
+        },
+    ]
+
+    with open(cas_csv, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=list(cas_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(cas_rows)
+
+    yield {
+        "base_dir": tmp_path,
+        "coll_csv": coll_csv,
+        "veh_csv": veh_csv,
+        "cas_csv": cas_csv,
+    }
+
+
+def compute_file_hash(path: Path) -> str:
+    """Calculate SHA256 checksum for a file."""
+    hasher = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(65536):
+            hasher.update(chunk)
+    return hasher.hexdigest()

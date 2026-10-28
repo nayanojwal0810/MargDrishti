@@ -1,0 +1,218 @@
+"""Data validation and data quality profiling for MargDrishti."""
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+import duckdb
+
+from marg_drishti.config import (
+    PipelineConfig,
+    COLLISION_REQUIRED_COLUMNS,
+    VEHICLE_REQUIRED_COLUMNS,
+    CASUALTY_REQUIRED_COLUMNS,
+    SENTINEL_UNKNOWN_CODE,
+)
+
+
+@dataclass
+class ValidationReport:
+    """Structured report detailing data validation and quality check outcomes."""
+
+    is_valid: bool = True
+    files_present: Dict[str, bool] = field(default_factory=dict)
+    schemas_valid: Dict[str, bool] = field(default_factory=dict)
+    missing_columns: Dict[str, List[str]] = field(default_factory=dict)
+    row_counts: Dict[str, int] = field(default_factory=dict)
+    duplicate_collision_ids: int = 0
+    orphaned_vehicles: int = 0
+    orphaned_casualties: int = 0
+    collisions_with_vehicles_pct: float = 0.0
+    collisions_with_casualties_pct: float = 0.0
+    date_ranges: Dict[str, Tuple[str, str]] = field(default_factory=dict)
+    severity_distribution: Dict[int, int] = field(default_factory=dict)
+    missing_values: Dict[str, Dict[str, int]] = field(default_factory=dict)
+    sentinel_unknown_values: Dict[str, Dict[str, int]] = field(default_factory=dict)
+    warnings: List[str] = field(default_factory=list)
+    errors: List[str] = field(default_factory=list)
+
+    def summary_text(self) -> str:
+        """Render human-readable summary of validation results."""
+        status = "PASSED" if self.is_valid else "FAILED"
+        lines = [
+            f"=== DATA VALIDATION REPORT [{status}] ===",
+            f"Files Checked: {len(self.files_present)} ({sum(self.files_present.values())} present)",
+        ]
+        for f, present in self.files_present.items():
+            lines.append(f"  - {f}: {'PRESENT' if present else 'MISSING'}")
+
+        lines.append("\nRow Counts:")
+        for tbl, count in self.row_counts.items():
+            lines.append(f"  - {tbl}: {count:,} rows")
+
+        lines.append("\nIntegrity & Key Constraints:")
+        lines.append(f"  - Duplicate collision identifiers: {self.duplicate_collision_ids}")
+        lines.append(f"  - Orphaned vehicle records: {self.orphaned_vehicles}")
+        lines.append(f"  - Orphaned casualty records: {self.orphaned_casualties}")
+        lines.append(f"  - Collisions linked to vehicle data: {self.collisions_with_vehicles_pct:.2f}%")
+        lines.append(f"  - Collisions linked to casualty data: {self.collisions_with_casualties_pct:.2f}%")
+
+        if self.date_ranges:
+            lines.append("\nTemporal Coverage:")
+            for tbl, (min_d, max_d) in self.date_ranges.items():
+                lines.append(f"  - {tbl}: {min_d} to {max_d}")
+
+        if self.errors:
+            lines.append(f"\nErrors ({len(self.errors)}):")
+            for err in self.errors:
+                lines.append(f"  [ERROR] {err}")
+
+        if self.warnings:
+            lines.append(f"\nQuality Warnings / Informational Notes ({len(self.warnings)}):")
+            for w in self.warnings:
+                lines.append(f"  [WARN] {w}")
+
+        return "\n".join(lines)
+
+
+class DataValidator:
+    """Performs schema, integrity, and quality checks on raw or converted data."""
+
+    def __init__(self, config: Optional[PipelineConfig] = None):
+        self.config = config or PipelineConfig()
+        self.con = duckdb.connect()
+
+    def close(self):
+        """Close internal DuckDB connection."""
+        self.con.close()
+
+    def check_file_existence(self) -> Dict[str, bool]:
+        """Check presence of required raw data files."""
+        return {
+            "official_collision_csv": self.config.official_collision_csv.exists(),
+            "official_vehicle_csv": self.config.official_vehicle_csv.exists(),
+            "official_casualty_csv": self.config.official_casualty_csv.exists(),
+            "research_archive_rar": self.config.research_archive_rar.exists(),
+            "research_extracted_csv": self.config.research_extracted_csv.exists(),
+        }
+
+    def validate_csv_sources(self) -> ValidationReport:
+        """Validate raw official CSV files and relational constraints."""
+        report = ValidationReport()
+        report.files_present = self.check_file_existence()
+
+        # Check critical official files
+        for key in ["official_collision_csv", "official_vehicle_csv", "official_casualty_csv"]:
+            if not report.files_present.get(key, False):
+                report.is_valid = False
+                report.errors.append(f"Required raw file is missing: {key}")
+
+        if not report.is_valid:
+            return report
+
+        coll_path = str(self.config.official_collision_csv)
+        veh_path = str(self.config.official_vehicle_csv)
+        cas_path = str(self.config.official_casualty_csv)
+
+        # 1. Schema check
+        for name, path, required_cols in [
+            ("collision", coll_path, COLLISION_REQUIRED_COLUMNS),
+            ("vehicle", veh_path, VEHICLE_REQUIRED_COLUMNS),
+            ("casualty", cas_path, CASUALTY_REQUIRED_COLUMNS),
+        ]:
+            cols_info = self.con.execute(f"DESCRIBE SELECT * FROM '{path}' LIMIT 1").fetchall()
+            present_cols = set(c[0] for c in cols_info)
+            missing = [c for c in required_cols if c not in present_cols]
+            report.schemas_valid[name] = len(missing) == 0
+            if missing:
+                report.missing_columns[name] = missing
+                report.is_valid = False
+                report.errors.append(f"Table '{name}' missing required columns: {missing}")
+
+        # 2. Row counts
+        report.row_counts["collision"] = self.con.execute(f"SELECT COUNT(*) FROM '{coll_path}'").fetchone()[0]
+        report.row_counts["vehicle"] = self.con.execute(f"SELECT COUNT(*) FROM '{veh_path}'").fetchone()[0]
+        report.row_counts["casualty"] = self.con.execute(f"SELECT COUNT(*) FROM '{cas_path}'").fetchone()[0]
+
+        # 3. Collision identifier uniqueness
+        dup_count = self.con.execute(f"""
+            SELECT COUNT(*) FROM (
+                SELECT collision_index FROM '{coll_path}'
+                GROUP BY collision_index HAVING COUNT(*) > 1
+            )
+        """).fetchone()[0]
+        report.duplicate_collision_ids = dup_count
+        if dup_count > 0:
+            report.is_valid = False
+            report.errors.append(f"Found {dup_count} duplicate collision_index records in collision table.")
+
+        # 4. Foreign key integrity: vehicle -> collision
+        orphaned_veh = self.con.execute(f"""
+            SELECT COUNT(*) FROM '{veh_path}' v
+            LEFT JOIN '{coll_path}' c ON v.collision_index = c.collision_index
+            WHERE c.collision_index IS NULL
+        """).fetchone()[0]
+        report.orphaned_vehicles = orphaned_veh
+        if orphaned_veh > 0:
+            report.is_valid = False
+            report.errors.append(f"Found {orphaned_veh} orphaned vehicle records that do not link to any collision.")
+
+        # 5. Foreign key integrity: casualty -> collision
+        orphaned_cas = self.con.execute(f"""
+            SELECT COUNT(*) FROM '{cas_path}' k
+            LEFT JOIN '{coll_path}' c ON k.collision_index = c.collision_index
+            WHERE c.collision_index IS NULL
+        """).fetchone()[0]
+        report.orphaned_casualties = orphaned_cas
+        if orphaned_cas > 0:
+            report.is_valid = False
+            report.errors.append(f"Found {orphaned_cas} orphaned casualty records that do not link to any collision.")
+
+        # Match coverage rates
+        total_coll = report.row_counts["collision"]
+        if total_coll > 0:
+            matched_veh = self.con.execute(f"""
+                SELECT COUNT(DISTINCT c.collision_index)
+                FROM '{coll_path}' c
+                JOIN '{veh_path}' v ON c.collision_index = v.collision_index
+            """).fetchone()[0]
+            matched_cas = self.con.execute(f"""
+                SELECT COUNT(DISTINCT c.collision_index)
+                FROM '{coll_path}' c
+                JOIN '{cas_path}' k ON c.collision_index = k.collision_index
+            """).fetchone()[0]
+            report.collisions_with_vehicles_pct = (matched_veh / total_coll) * 100.0
+            report.collisions_with_casualties_pct = (matched_cas / total_coll) * 100.0
+
+        # 6. Date range check
+        date_stats = self.con.execute(f"SELECT MIN(date), MAX(date) FROM '{coll_path}'").fetchone()
+        report.date_ranges["collision"] = (str(date_stats[0]), str(date_stats[1]))
+
+        # 7. Collision severity distribution
+        sev_counts = self.con.execute(f"""
+            SELECT collision_severity, COUNT(*)
+            FROM '{coll_path}'
+            GROUP BY collision_severity
+            ORDER BY collision_severity
+        """).fetchall()
+        report.severity_distribution = {row[0]: row[1] for row in sev_counts}
+
+        # 8. Check missing & sentinel -1 values across key collision features
+        check_cols = [
+            "speed_limit", "road_type", "light_conditions",
+            "weather_conditions", "road_surface_conditions",
+            "junction_control", "local_authority_district"
+        ]
+        report.missing_values["collision"] = {}
+        report.sentinel_unknown_values["collision"] = {}
+
+        for col in check_cols:
+            null_count = self.con.execute(f"SELECT COUNT(*) FROM '{coll_path}' WHERE {col} IS NULL").fetchone()[0]
+            neg1_count = self.con.execute(f"SELECT COUNT(*) FROM '{coll_path}' WHERE {col} = {SENTINEL_UNKNOWN_CODE}").fetchone()[0]
+            report.missing_values["collision"][col] = null_count
+            report.sentinel_unknown_values["collision"][col] = neg1_count
+            if neg1_count > 0:
+                report.warnings.append(
+                    f"Column '{col}' has {neg1_count:,} records coded as -1 (Data missing / Unknown)."
+                )
+
+        return report

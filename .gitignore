@@ -1,0 +1,55 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env
+.env.*
+
+# Data files (raw, extracted, intermediate, processed)
+data/raw/
+data/processed/
+data/interim/
+*.csv
+*.rar
+*.zip
+*.parquet
+
+# Databases
+*.duckdb
+*.duckdb.wal
+*.db
+*.sqlite
+*.sqlite3
+
+# Models and serialization
+models/
+*.pkl
+*.joblib
+*.model
+
+# Internal audit, temporary work, scratch files
+.local_audit/
+brain/
+*.tmp
+
+# Logs and outputs
+*.log
+logs/
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
