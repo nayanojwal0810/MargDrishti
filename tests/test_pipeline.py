@@ -25,6 +25,10 @@ def test_full_pipeline_synthetic_execution_and_raw_data_immutability(synthetic_d
     # 1. Assert pipeline success
     assert result["success"] is True
     assert result["integrity"]["is_valid"] is True
+    assert result["integrity"]["summary_coverage_complete"] is True
+    assert result["integrity"]["total_blank_keys"] == 0
+    assert result["integrity"]["veh_summary_count"] == 6
+    assert result["integrity"]["cas_summary_count"] == 6
     assert result["row_counts"]["stg_collisions"] == 6
     assert result["row_counts"]["mart_collision_analytical"] == 6
     assert result["row_counts"]["mart_collision_outcomes"] == 6

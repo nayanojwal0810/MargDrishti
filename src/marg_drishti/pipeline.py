@@ -67,9 +67,13 @@ def run_data_pipeline(
     db.close()
 
     print(f"  Staging Collisions: {integrity['stg_collisions_count']:,}")
+    print(f"  Vehicle Summary   : {integrity['veh_summary_count']:,}")
+    print(f"  Casualty Summary  : {integrity['cas_summary_count']:,}")
     print(f"  Analytical Mart   : {integrity['mart_analytical_count']:,}")
     print(f"  Outcomes Mart     : {integrity['mart_outcomes_count']:,}")
     print(f"  Row Count Preserved: {'YES' if integrity['row_count_preserved'] else 'NO'}")
+    print(f"  Summary Coverage Complete: {'YES' if integrity['summary_coverage_complete'] else 'NO'}")
+    print(f"  Total Blank / Missing Keys: {integrity['total_blank_keys']}")
     print(f"  Duplicate Keys in Analytical Mart: {integrity['duplicate_mart_keys']}")
     print(f"  Duplicate Keys in Vehicle Summary: {integrity['duplicate_vehicle_summary_keys']}")
     print(f"  Duplicate Keys in Casualty Summary: {integrity['duplicate_casualty_summary_keys']}")

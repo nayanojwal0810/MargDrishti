@@ -25,9 +25,14 @@ class ValidationReport:
     schemas_valid: Dict[str, bool] = field(default_factory=dict)
     missing_columns: Dict[str, List[str]] = field(default_factory=dict)
     row_counts: Dict[str, int] = field(default_factory=dict)
+    blank_collision_ids: int = 0
     duplicate_collision_ids: int = 0
+    duplicate_vehicle_keys: int = 0
+    duplicate_casualty_keys: int = 0
     orphaned_vehicles: int = 0
     orphaned_casualties: int = 0
+    unlinked_vehicle_collisions: int = 0
+    unlinked_casualty_collisions: int = 0
     collisions_with_vehicles_pct: float = 0.0
     collisions_with_casualties_pct: float = 0.0
     date_ranges: Dict[str, Tuple[str, str]] = field(default_factory=dict)
@@ -52,11 +57,14 @@ class ValidationReport:
             lines.append(f"  - {tbl}: {count:,} rows")
 
         lines.append("\nIntegrity & Key Constraints:")
+        lines.append(f"  - Missing or blank collision identifiers: {self.blank_collision_ids}")
         lines.append(f"  - Duplicate collision identifiers: {self.duplicate_collision_ids}")
+        lines.append(f"  - Duplicate (collision, vehicle) keys: {self.duplicate_vehicle_keys}")
+        lines.append(f"  - Duplicate (collision, casualty) keys: {self.duplicate_casualty_keys}")
         lines.append(f"  - Orphaned vehicle records: {self.orphaned_vehicles}")
         lines.append(f"  - Orphaned casualty records: {self.orphaned_casualties}")
-        lines.append(f"  - Collisions linked to vehicle data: {self.collisions_with_vehicles_pct:.2f}%")
-        lines.append(f"  - Collisions linked to casualty data: {self.collisions_with_casualties_pct:.2f}%")
+        lines.append(f"  - Collisions linked to vehicle data: {self.collisions_with_vehicles_pct:.2f}% (unlinked: {self.unlinked_vehicle_collisions})")
+        lines.append(f"  - Collisions linked to casualty data: {self.collisions_with_casualties_pct:.2f}% (unlinked: {self.unlinked_casualty_collisions})")
 
         if self.date_ranges:
             lines.append("\nTemporal Coverage:")
@@ -109,11 +117,11 @@ class DataValidator:
         if not report.is_valid:
             return report
 
-        coll_path = str(self.config.official_collision_csv)
-        veh_path = str(self.config.official_vehicle_csv)
-        cas_path = str(self.config.official_casualty_csv)
+        coll_path = str(self.config.official_collision_csv).replace("\\", "/")
+        veh_path = str(self.config.official_vehicle_csv).replace("\\", "/")
+        cas_path = str(self.config.official_casualty_csv).replace("\\", "/")
 
-        # 1. Schema check
+        # 1. Schema check (fails gracefully if any required columns are missing)
         for name, path, required_cols in [
             ("collision", coll_path, COLLISION_REQUIRED_COLUMNS),
             ("vehicle", veh_path, VEHICLE_REQUIRED_COLUMNS),
@@ -128,12 +136,26 @@ class DataValidator:
                 report.is_valid = False
                 report.errors.append(f"Table '{name}' missing required columns: {missing}")
 
+        # Halt early if schema validation fails before running queries that depend on missing columns
+        if not report.is_valid:
+            return report
+
         # 2. Row counts
         report.row_counts["collision"] = self.con.execute(f"SELECT COUNT(*) FROM '{coll_path}'").fetchone()[0]
         report.row_counts["vehicle"] = self.con.execute(f"SELECT COUNT(*) FROM '{veh_path}'").fetchone()[0]
         report.row_counts["casualty"] = self.con.execute(f"SELECT COUNT(*) FROM '{cas_path}'").fetchone()[0]
 
-        # 3. Collision identifier uniqueness
+        # 3. Collision identifier presence and non-blank check
+        blank_coll_ids = self.con.execute(f"""
+            SELECT COUNT(*) FROM '{coll_path}'
+            WHERE collision_index IS NULL OR TRIM(CAST(collision_index AS VARCHAR)) = ''
+        """).fetchone()[0]
+        report.blank_collision_ids = blank_coll_ids
+        if blank_coll_ids > 0:
+            report.is_valid = False
+            report.errors.append(f"Found {blank_coll_ids} missing or blank collision_index records in collision table.")
+
+        # 4. Collision identifier primary key uniqueness
         dup_count = self.con.execute(f"""
             SELECT COUNT(*) FROM (
                 SELECT collision_index FROM '{coll_path}'
@@ -145,7 +167,31 @@ class DataValidator:
             report.is_valid = False
             report.errors.append(f"Found {dup_count} duplicate collision_index records in collision table.")
 
-        # 4. Foreign key integrity: vehicle -> collision
+        # 5. Composite child key uniqueness in vehicle data: (collision_index, vehicle_reference)
+        dup_veh_keys = self.con.execute(f"""
+            SELECT COUNT(*) FROM (
+                SELECT collision_index, vehicle_reference FROM '{veh_path}'
+                GROUP BY collision_index, vehicle_reference HAVING COUNT(*) > 1
+            )
+        """).fetchone()[0]
+        report.duplicate_vehicle_keys = dup_veh_keys
+        if dup_veh_keys > 0:
+            report.is_valid = False
+            report.errors.append(f"Found {dup_veh_keys} duplicate (collision_index, vehicle_reference) keys in vehicle table.")
+
+        # 6. Composite child key uniqueness in casualty data: (collision_index, casualty_reference)
+        dup_cas_keys = self.con.execute(f"""
+            SELECT COUNT(*) FROM (
+                SELECT collision_index, casualty_reference FROM '{cas_path}'
+                GROUP BY collision_index, casualty_reference HAVING COUNT(*) > 1
+            )
+        """).fetchone()[0]
+        report.duplicate_casualty_keys = dup_cas_keys
+        if dup_cas_keys > 0:
+            report.is_valid = False
+            report.errors.append(f"Found {dup_cas_keys} duplicate (collision_index, casualty_reference) keys in casualty table.")
+
+        # 7. Foreign key integrity: vehicle -> collision
         orphaned_veh = self.con.execute(f"""
             SELECT COUNT(*) FROM '{veh_path}' v
             LEFT JOIN '{coll_path}' c ON v.collision_index = c.collision_index
@@ -156,7 +202,7 @@ class DataValidator:
             report.is_valid = False
             report.errors.append(f"Found {orphaned_veh} orphaned vehicle records that do not link to any collision.")
 
-        # 5. Foreign key integrity: casualty -> collision
+        # 8. Foreign key integrity: casualty -> collision
         orphaned_cas = self.con.execute(f"""
             SELECT COUNT(*) FROM '{cas_path}' k
             LEFT JOIN '{coll_path}' c ON k.collision_index = c.collision_index
@@ -167,7 +213,7 @@ class DataValidator:
             report.is_valid = False
             report.errors.append(f"Found {orphaned_cas} orphaned casualty records that do not link to any collision.")
 
-        # Match coverage rates
+        # 9. Child record coverage: every collision must have linked vehicle and casualty records
         total_coll = report.row_counts["collision"]
         if total_coll > 0:
             matched_veh = self.con.execute(f"""
@@ -183,11 +229,27 @@ class DataValidator:
             report.collisions_with_vehicles_pct = (matched_veh / total_coll) * 100.0
             report.collisions_with_casualties_pct = (matched_cas / total_coll) * 100.0
 
-        # 6. Date range check
+            unlinked_veh = total_coll - matched_veh
+            report.unlinked_vehicle_collisions = unlinked_veh
+            if unlinked_veh > 0:
+                report.is_valid = False
+                report.errors.append(
+                    f"{unlinked_veh} collision records have no linked vehicle records ({report.collisions_with_vehicles_pct:.2f}% coverage). Complete vehicle coverage is required."
+                )
+
+            unlinked_cas = total_coll - matched_cas
+            report.unlinked_casualty_collisions = unlinked_cas
+            if unlinked_cas > 0:
+                report.is_valid = False
+                report.errors.append(
+                    f"{unlinked_cas} collision records have no linked casualty records ({report.collisions_with_casualties_pct:.2f}% coverage). Complete casualty coverage is required."
+                )
+
+        # 10. Date range check
         date_stats = self.con.execute(f"SELECT MIN(date), MAX(date) FROM '{coll_path}'").fetchone()
         report.date_ranges["collision"] = (str(date_stats[0]), str(date_stats[1]))
 
-        # 7. Collision severity distribution
+        # 11. Collision severity distribution
         sev_counts = self.con.execute(f"""
             SELECT collision_severity, COUNT(*)
             FROM '{coll_path}'
@@ -196,7 +258,7 @@ class DataValidator:
         """).fetchall()
         report.severity_distribution = {row[0]: row[1] for row in sev_counts}
 
-        # 8. Check missing & sentinel -1 values across key collision features
+        # 12. Check missing & sentinel -1 values across key collision features
         check_cols = [
             "speed_limit", "road_type", "light_conditions",
             "weather_conditions", "road_surface_conditions",

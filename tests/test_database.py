@@ -95,9 +95,12 @@ def test_collision_time_handling_no_midnight_default(converted_db):
 
     assert len(rows) == 6
 
-    # Collision 1: Valid time ('14:30') -> timestamp and hour correctly populated
-    assert rows[0][2].strftime("%H:%M") == "14:30"
-    assert rows[0][3] is not None
+    # Collision 1: Valid time ('14:30') -> exact timestamp preserving recorded minutes
+    c1_ts = rows[0][3]
+    assert c1_ts is not None
+    assert c1_ts.strftime("%Y-%m-%d %H:%M:%S") == "2021-03-15 14:30:00"
+    assert c1_ts.minute == 30, "collision_timestamp must preserve exact minutes (30), not truncated to 00"
+    assert c1_ts.strftime("%H:%M:%S") != "14:00:00", "collision_timestamp must not be truncated to hour"
     assert rows[0][4] == 14
 
     # Collision 4: Missing time ('') -> date preserved, but timestamp and hour are NULL
@@ -223,3 +226,17 @@ def test_sentinel_values_handled_properly(converted_db):
     assert res[0] == -1
     # Derived clean speed_limit_mph is NULL (not zero!)
     assert res[1] is None
+
+
+def test_summary_row_completeness_and_key_validity(converted_db):
+    """Verify that summary tables have 100% collision coverage with valid, non-blank keys."""
+    integrity = converted_db.verify_integrity()
+
+    assert integrity["is_valid"] is True
+    assert integrity["summary_coverage_complete"] is True
+    assert integrity["total_blank_keys"] == 0
+    assert integrity["unmatched_veh_summary"] == 0
+    assert integrity["unmatched_cas_summary"] == 0
+    assert integrity["veh_summary_count"] == integrity["stg_collisions_count"]
+    assert integrity["cas_summary_count"] == integrity["stg_collisions_count"]
+

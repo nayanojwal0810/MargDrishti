@@ -1,6 +1,6 @@
 # MargDrishti Data Model Architecture
 
-The MargDrishti data model is structured in layers using DuckDB and Apache Parquet. It enforces relational integrity, grain preservation, official DfT STATS19 category specifications, and strict separation between pre-crash predictive factors and post-crash casualty outcomes.
+The MargDrishti data model is structured in layers using DuckDB and Apache Parquet. It enforces relational integrity, grain preservation, official DfT STATS19 category specifications, and strict separation between collision context variables and post-crash casualty outcomes.
 
 ---
 
@@ -22,7 +22,7 @@ Vehicle Summary (`agg_vehicle_summary`)     Casualty Summary (`agg_casualty_summ
          │                                              │
          ▼ (1:1 LEFT JOIN)                              ▼ (1:1 LEFT JOIN)
 Analytical Mart (`mart_collision_analytical`)  Outcomes Mart (`mart_collision_outcomes`)
-[Pre-crash features & severity target]       [Post-crash injury burden & casualty analysis]
+[Collision context, vehicle mix & target]    [Post-crash injury burden & casualty analysis]
 ```
 
 ---
@@ -36,7 +36,7 @@ Analytical Mart (`mart_collision_analytical`)  Outcomes Mart (`mart_collision_ou
   - Standardizes `collision_index` and `collision_ref_no` as `VARCHAR`.
   - **Temporal Handling:**
     - Derives `collision_date` as `DATE`.
-    - If `time` is valid, derives `collision_time` (`TIME`), `collision_timestamp` (`TIMESTAMP`), and `collision_hour` (`INTEGER`).
+    - If `time` is valid, derives `collision_time` (`TIME`), exact `collision_timestamp` (`TIMESTAMP` preserving minutes), and `collision_hour` (`INTEGER`).
     - If `time` is missing or unparseable, `collision_time`, `collision_timestamp`, and `collision_hour` are strictly set to `NULL` while preserving `collision_date`.
     - **No Midnight Substitution:** Missing times are never replaced with `00:00:00`, preventing artificial distortion of nighttime collision patterns.
   - **Collision Severity & Binary Target:**
@@ -69,10 +69,10 @@ Analytical Mart (`mart_collision_analytical`)  Outcomes Mart (`mart_collision_ou
 - **Driver Demographic Summaries:**
   - `youngest_driver_age`, `oldest_driver_age`, `avg_driver_age`.
   - Flags: `has_young_driver` (17–24 years), `has_older_driver` (70+ years).
-- **Vehicle Characteristics & Pre-Impact Dynamics:**
+- **Vehicle Characteristics & Incident Context / Event Variables:**
   - Vehicle age metrics (`newest_vehicle_age`, `oldest_vehicle_age`, `avg_vehicle_age`).
   - `max_engine_capacity_cc`.
-  - Pre-impact manoeuvre flags: `has_skidding_or_overturning`, `has_vehicle_leaving_carriageway`, `has_towing_or_articulation`, `has_hit_object_off_carriageway`.
+  - Dynamic manoeuvre and event flags: `has_skidding_or_overturning`, `has_vehicle_leaving_carriageway`, `has_towing_or_articulation`, `has_hit_object_in_carriageway`, `has_hit_object_off_carriageway`.
 
 ### 2.3 Casualty Summary: `agg_casualty_summary`
 - **Source:** `raw_casualties`
@@ -95,12 +95,14 @@ Analytical Mart (`mart_collision_analytical`)  Outcomes Mart (`mart_collision_ou
   - **Age Demographics:** `youngest_casualty_age`, `oldest_casualty_age`, `child_casualty_count` (<16 years), `elderly_casualty_count` (65+ years).
 
 ### 2.4 Analytical Mart: `mart_collision_analytical`
-- **Grain:** 1 row per collision (`collision_index`).
+- **Grain:** Exactly 1 row per collision (`collision_index`).
 - **Join:** `stg_collisions c LEFT JOIN agg_vehicle_summary v ON c.collision_index = v.collision_index`.
 - **Integrity Guarantee:** The row count matches `stg_collisions` exactly (513,801 rows). Zero row multiplication occurs.
-- **Separation of Concerns:** Contains **zero casualty outcome columns** or post-crash features, preventing data leakage during statistical modelling.
+- **Content & Event Variables:** Retains useful collision-context and event variables (such as skidding, objects struck, and vehicle departures from the carriageway) alongside environmental conditions and vehicle mix.
+- **Feature Eligibility Notice:** Because the analytical mart encompasses incident context and crash-dynamic variables alongside pre-crash environmental attributes, **feature eligibility must be explicitly reviewed and filtered before any future model is trained**. Incident dynamics represent event characteristics rather than baseline pre-crash risk factors.
+- **Separation of Concerns:** Strictly excludes all casualty outcome aggregates (fatal/serious casualty counts, casualty severity flags) and post-crash operational response fields (police attendance, injury-based recording flags) to prevent post-crash target leakage.
 
 ### 2.5 Outcomes Mart: `mart_collision_outcomes`
-- **Grain:** 1 row per collision (`collision_index`).
+- **Grain:** Exactly 1 row per collision (`collision_index`).
 - **Join:** `stg_collisions c LEFT JOIN agg_casualty_summary k ON c.collision_index = k.collision_index`.
 - **Purpose:** Dedicated to casualty severity analytics, pedestrian casualty impact, and public health road safety burden reporting.

@@ -70,12 +70,22 @@ class DatabaseManager:
         return counts
 
     def verify_integrity(self) -> Dict[str, Any]:
-        """Execute comprehensive integrity and constraint checks across all marts."""
+        """Execute comprehensive integrity, grain, and coverage checks across all tables and marts."""
         stg_count = self.con.execute("SELECT COUNT(*) FROM stg_collisions").fetchone()[0]
+        veh_summary_count = self.con.execute("SELECT COUNT(*) FROM agg_vehicle_summary").fetchone()[0]
+        cas_summary_count = self.con.execute("SELECT COUNT(*) FROM agg_casualty_summary").fetchone()[0]
         mart_count = self.con.execute("SELECT COUNT(*) FROM mart_collision_analytical").fetchone()[0]
         outcomes_count = self.con.execute("SELECT COUNT(*) FROM mart_collision_outcomes").fetchone()[0]
 
-        # 1. Uniqueness of collision_index across all marts
+        # 1. Key presence and validity (no NULL or blank collision_index)
+        blank_stg = self.con.execute("SELECT COUNT(*) FROM stg_collisions WHERE collision_index IS NULL OR TRIM(collision_index) = ''").fetchone()[0]
+        blank_veh_summary = self.con.execute("SELECT COUNT(*) FROM agg_vehicle_summary WHERE collision_index IS NULL OR TRIM(collision_index) = ''").fetchone()[0]
+        blank_cas_summary = self.con.execute("SELECT COUNT(*) FROM agg_casualty_summary WHERE collision_index IS NULL OR TRIM(collision_index) = ''").fetchone()[0]
+        blank_mart = self.con.execute("SELECT COUNT(*) FROM mart_collision_analytical WHERE collision_index IS NULL OR TRIM(collision_index) = ''").fetchone()[0]
+        blank_outcomes = self.con.execute("SELECT COUNT(*) FROM mart_collision_outcomes WHERE collision_index IS NULL OR TRIM(collision_index) = ''").fetchone()[0]
+        total_blank_keys = blank_stg + blank_veh_summary + blank_cas_summary + blank_mart + blank_outcomes
+
+        # 2. Key uniqueness across all tables
         dup_stg = self.con.execute("""
             SELECT COUNT(*) FROM (
                 SELECT collision_index FROM stg_collisions
@@ -111,7 +121,20 @@ class DatabaseManager:
             )
         """).fetchone()[0]
 
-        # 2. Foreign-key link verification (summaries -> collisions)
+        # 3. Summary table collision-level coverage (every collision must have a summary record)
+        unmatched_veh_summary = self.con.execute("""
+            SELECT COUNT(*) FROM stg_collisions c
+            LEFT JOIN agg_vehicle_summary v ON c.collision_index = v.collision_index
+            WHERE v.collision_index IS NULL
+        """).fetchone()[0]
+
+        unmatched_cas_summary = self.con.execute("""
+            SELECT COUNT(*) FROM stg_collisions c
+            LEFT JOIN agg_casualty_summary k ON c.collision_index = k.collision_index
+            WHERE k.collision_index IS NULL
+        """).fetchone()[0]
+
+        # 4. Foreign-key link verification (summaries -> collisions)
         orphaned_veh_summary = self.con.execute("""
             SELECT COUNT(*) FROM agg_vehicle_summary v
             LEFT JOIN stg_collisions c ON v.collision_index = c.collision_index
@@ -124,7 +147,7 @@ class DatabaseManager:
             WHERE c.collision_index IS NULL
         """).fetchone()[0]
 
-        # 3. Severity label and binary target consistency
+        # 5. Severity label and binary target consistency
         inconsistent_severities = self.con.execute("""
             SELECT COUNT(*) FROM stg_collisions
             WHERE (collision_severity = 1 AND (is_fatal_or_serious != 1 OR collision_severity_name != 'Fatal'))
@@ -133,7 +156,7 @@ class DatabaseManager:
                OR (collision_severity NOT IN (1, 2, 3) AND (is_fatal_or_serious IS NOT NULL OR collision_severity_name IS NOT NULL))
         """).fetchone()[0]
 
-        # 4. Strict exclusion of casualty outcomes from the analytical mart
+        # 6. Strict exclusion of casualty outcomes from the analytical mart
         analytical_cols = [
             c[0].lower() for c in self.con.execute("DESCRIBE SELECT * FROM mart_collision_analytical").fetchall()
         ]
@@ -143,6 +166,7 @@ class DatabaseManager:
             "slight_casualty_count",
             "ksi_casualty_count",
             "has_fatal_casualty",
+            "has_serious_casualty",
             "has_ksi_casualty",
             "pedestrian_casualty_count",
             "cyclist_casualty_count",
@@ -156,16 +180,29 @@ class DatabaseManager:
         ]
         leaked_outcomes = [col for col in forbidden_outcome_cols if col in analytical_cols]
 
-        # 5. Missing time handling check (no midnight substitution)
+        # 7. Missing time handling check (no midnight substitution)
         midnight_substitutions = self.con.execute("""
             SELECT COUNT(*) FROM stg_collisions
             WHERE collision_time IS NULL
               AND collision_timestamp IS NOT NULL
         """).fetchone()[0]
 
-        # 6. Overall validation status
+        # 8. Overall validation status
         row_count_preserved = (stg_count == mart_count == outcomes_count)
-        all_unique = (dup_stg == 0 and dup_mart == 0 and dup_outcomes == 0 and dup_veh_summary == 0 and dup_cas_summary == 0)
+        summary_coverage_complete = (
+            unmatched_veh_summary == 0
+            and unmatched_cas_summary == 0
+            and veh_summary_count == stg_count
+            and cas_summary_count == stg_count
+        )
+        keys_valid = (total_blank_keys == 0)
+        all_unique = (
+            dup_stg == 0
+            and dup_mart == 0
+            and dup_outcomes == 0
+            and dup_veh_summary == 0
+            and dup_cas_summary == 0
+        )
         no_orphans = (orphaned_veh_summary == 0 and orphaned_cas_summary == 0)
         severity_consistent = (inconsistent_severities == 0)
         no_leaks = (len(leaked_outcomes) == 0)
@@ -173,6 +210,8 @@ class DatabaseManager:
 
         is_valid = (
             row_count_preserved
+            and summary_coverage_complete
+            and keys_valid
             and all_unique
             and no_orphans
             and severity_consistent
@@ -182,9 +221,15 @@ class DatabaseManager:
 
         return {
             "stg_collisions_count": stg_count,
+            "veh_summary_count": veh_summary_count,
+            "cas_summary_count": cas_summary_count,
             "mart_analytical_count": mart_count,
             "mart_outcomes_count": outcomes_count,
             "row_count_preserved": row_count_preserved,
+            "summary_coverage_complete": summary_coverage_complete,
+            "total_blank_keys": total_blank_keys,
+            "unmatched_veh_summary": unmatched_veh_summary,
+            "unmatched_cas_summary": unmatched_cas_summary,
             "duplicate_stg_keys": dup_stg,
             "duplicate_mart_keys": dup_mart,
             "duplicate_outcomes_keys": dup_outcomes,

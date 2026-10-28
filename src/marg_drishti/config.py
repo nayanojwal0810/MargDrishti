@@ -14,49 +14,66 @@ from typing import Dict, List
 SENTINEL_UNKNOWN_CODE = -1
 
 # Core column definitions required for official STATS19 datasets
+# Covers every field utilized across all SQL staging, aggregations, and mart definitions
 COLLISION_REQUIRED_COLUMNS: List[str] = [
     "collision_index",
     "collision_year",
     "collision_ref_no",
-    "collision_severity",
-    "number_of_vehicles",
-    "number_of_casualties",
     "date",
-    "day_of_week",
     "time",
+    "day_of_week",
+    "collision_severity",
     "first_road_class",
+    "first_road_number",
     "road_type",
     "speed_limit",
+    "junction_detail",
+    "junction_control",
     "light_conditions",
     "weather_conditions",
     "road_surface_conditions",
     "urban_or_rural_area",
+    "latitude",
+    "longitude",
+    "location_easting_osgr",
+    "location_northing_osgr",
+    "police_force",
+    "local_authority_district",
     "local_authority_ons_district",
+    "local_authority_highway",
+    "local_authority_highway_current",
+    "lsoa_of_accident_location",
+    "number_of_vehicles",
+    "number_of_casualties",
+    "did_police_officer_attend_scene_of_accident",
+    "enhanced_severity_collision",
+    "collision_injury_based",
 ]
 
 VEHICLE_REQUIRED_COLUMNS: List[str] = [
     "collision_index",
-    "collision_year",
-    "collision_ref_no",
     "vehicle_reference",
     "vehicle_type",
-    "vehicle_manoeuvre",
+    "escooter_flag",
     "sex_of_driver",
     "age_of_driver",
     "age_of_vehicle",
     "engine_capacity_cc",
+    "towing_and_articulation",
+    "skidding_and_overturning",
+    "vehicle_leaving_carriageway",
+    "hit_object_in_carriageway",
+    "hit_object_off_carriageway",
 ]
 
 CASUALTY_REQUIRED_COLUMNS: List[str] = [
     "collision_index",
-    "collision_year",
-    "collision_ref_no",
-    "vehicle_reference",
     "casualty_reference",
     "casualty_class",
-    "sex_of_casualty",
-    "age_of_casualty",
     "casualty_severity",
+    "casualty_type",
+    "age_of_casualty",
+    "escooter_flag",
 ]
 
 # Code descriptions according to DfT STATS19 / STATS20 Data Dictionary

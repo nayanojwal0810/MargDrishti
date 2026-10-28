@@ -58,7 +58,8 @@ SELECT
     AVG(CASE WHEN age_of_vehicle >= 0 THEN age_of_vehicle END) AS avg_vehicle_age,
     MAX(CASE WHEN engine_capacity_cc > 0 THEN engine_capacity_cc END) AS max_engine_capacity_cc,
     
-    -- Dynamic pre-impact manoeuvres & incidents
+    -- Dynamic incident collision-context and event variables (manoeuvres, skidding, objects hit)
+    -- NOTE: These are collision-context variables; feature eligibility must be reviewed before future model training.
     MAX(CASE WHEN towing_and_articulation > 0 THEN 1 ELSE 0 END) AS has_towing_or_articulation,
     MAX(CASE WHEN skidding_and_overturning > 0 THEN 1 ELSE 0 END) AS has_skidding_or_overturning,
     MAX(CASE WHEN vehicle_leaving_carriageway > 0 THEN 1 ELSE 0 END) AS has_vehicle_leaving_carriageway,

@@ -20,7 +20,7 @@ The pipeline consists of four sequential stages:
 - **No Silent Value Alteration:** Missing data and `-1` sentinel codes are identified and documented, not silently set to zero.
 - **Accurate Category Mappings:** Category classifications follow official STATS19/STATS20 specifications (e.g. vehicle type 16 is correctly mapped to ridden horses, not pedal cycles; mobility scooters and personal light electric vehicles are tracked separately).
 - **Relational Grain Preservation:** Vehicle and casualty tables are aggregated to the collision grain before joining, ensuring collisions are never duplicated.
-- **Outcome Separation:** Post-crash casualty outcomes are isolated from pre-crash analytical mart features to prevent target leakage.
+- **Outcome Separation & Feature Eligibility:** Post-crash casualty outcomes and operational response indicators are isolated from the collision analytical mart to prevent target leakage. The analytical mart retains incident context and event variables for exploratory analysis; feature eligibility must be reviewed prior to future model training.
 - **Raw Data Immutability:** The pipeline treats raw data as strictly read-only. Source files are never modified or rewritten.
 
 ---

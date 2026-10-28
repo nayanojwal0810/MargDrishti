@@ -2,8 +2,11 @@
 -- Analytical data marts combining validated dimensions and aggregations.
 -- Guarantees exact 1:1 collision grain without record duplication.
 
--- Mart 1: Pre-crash collision and vehicle analytical mart
--- Strictly excludes casualty outcomes to avoid post-crash leakage.
+-- Mart 1: Collision and vehicle analytical mart (mart_collision_analytical)
+-- Combines road environment, vehicle mix, driver demographics, and incident collision-context/event variables.
+-- NOTE: Variables describing incident dynamics (e.g. skidding, objects hit, vehicle leaving carriageway)
+-- represent collision-context/event characteristics. Feature eligibility must be reviewed before future model training.
+-- Strictly excludes casualty outcome aggregates and post-crash response fields to avoid target leakage.
 CREATE OR REPLACE TABLE mart_collision_analytical AS
 SELECT
     c.collision_index,
@@ -103,6 +106,8 @@ SELECT
     v.avg_vehicle_age,
     v.max_engine_capacity_cc,
     
+    -- Collision-context and incident event variables (manoeuvres, skidding, objects hit)
+    -- NOTE: Feature eligibility must be reviewed before any predictive model training.
     COALESCE(v.has_towing_or_articulation, 0) AS has_towing_or_articulation,
     COALESCE(v.has_skidding_or_overturning, 0) AS has_skidding_or_overturning,
     COALESCE(v.has_vehicle_leaving_carriageway, 0) AS has_vehicle_leaving_carriageway,

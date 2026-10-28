@@ -8,8 +8,9 @@ MargDrishti operates exclusively on official UK road-casualty records published 
 
 The Department for Transport collects road traffic collision records reported by police forces across Great Britain via the STATS19 reporting system.
 
-- **Source:** [UK Department for Transport - Road Casualty Statistics](https://www.gov.uk/government/collections/road-accidents-and-safety-statistics)
-- **Official Specification:** [STATS19 Forms and Guidance](https://www.gov.uk/government/publications/stats19-forms-and-guidance)
+- **Official Open Data Portal:** [DfT Road Safety Open Data](https://www.gov.uk/government/statistical-data-sets/road-safety-open-data)
+- **Publication Collection:** [UK Department for Transport - Road Casualty Statistics](https://www.gov.uk/government/collections/road-accidents-and-safety-statistics)
+- **Official Guidance:** [STATS19 Forms and Guidance](https://www.gov.uk/government/publications/stats19-forms-and-guidance)
 - **Snapshot Period:** 2021–2025 (rolling 5-year official release)
 - **Format:** CSV files ingested, validated, and converted to Apache Parquet
 - **Reporting Scope:** Personal injury collisions occurring on public roads in Great Britain resulting in injury or death reported to the police.
@@ -63,3 +64,13 @@ In accordance with official DfT STATS19 data definitions:
 - **Personal Injury Only:** STATS19 records only collisions that involve personal injury and are reported to police. Damage-only collisions are not recorded.
 - **Reporting Bias:** Slight injuries and collisions involving single pedal cyclists have a lower reporting rate compared to fatal and serious collisions.
 - **Reporting Standard Changes:** Injury-based reporting (CRASH system) adoption across police forces has refined the categorization between Serious and Slight injuries since 2017.
+
+---
+
+## 4. Official Open Data Attribution & Licensing
+
+This project utilizes public sector information licensed under the Open Government Licence v3.0.
+
+- **Data Source Portal:** [DfT Road Safety Open Data](https://www.gov.uk/government/statistical-data-sets/road-safety-open-data)
+- **Licence Terms:** [UK Open Government Licence (OGL v3.0)](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/)
+- **Attribution Statement:** Contains National Statistics data © Crown copyright and database right.

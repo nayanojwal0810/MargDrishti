@@ -13,7 +13,7 @@ SELECT
     TRY_CAST(time AS TIME) AS collision_time,
     CASE
         WHEN TRY_CAST(date AS DATE) IS NOT NULL AND TRY_CAST(time AS TIME) IS NOT NULL
-        THEN date_trunc('hour', TRY_CAST(date AS DATE) + TRY_CAST(time AS TIME))
+        THEN TRY_CAST(date AS DATE) + TRY_CAST(time AS TIME)
         ELSE NULL
     END AS collision_timestamp,
     EXTRACT(YEAR FROM TRY_CAST(date AS DATE)) AS derived_year,
