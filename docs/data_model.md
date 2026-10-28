@@ -1,6 +1,6 @@
 # MargDrishti Data Model Architecture
 
-The MargDrishti data model is structured in layers using DuckDB and Apache Parquet. It enforces relational integrity, grain preservation, and strict separation between pre-crash predictive factors and post-crash casualty outcomes.
+The MargDrishti data model is structured in layers using DuckDB and Apache Parquet. It enforces relational integrity, grain preservation, official DfT STATS19 category specifications, and strict separation between pre-crash predictive factors and post-crash casualty outcomes.
 
 ---
 
@@ -31,37 +31,74 @@ Analytical Mart (`mart_collision_analytical`)  Outcomes Mart (`mart_collision_ou
 
 ### 2.1 Staging Layer: `stg_collisions`
 - **Source:** `raw_collisions`
-- **Grain:** 1 row per collision (`collision_index` is unique).
-- **Transformations:**
+- **Grain:** 1 row per collision (`collision_index` is unique primary key).
+- **Transformations & Rules:**
   - Standardizes `collision_index` and `collision_ref_no` as `VARCHAR`.
-  - Derives typed dates (`collision_date`) and timestamps (`collision_timestamp`).
-  - Maps numerical codes to descriptive category labels (`collision_severity_name`, `day_of_week_name`, `road_type_name`, `light_conditions_name`, `weather_conditions_name`, `road_surface_conditions_name`).
-  - Derives binary severity target: `is_fatal_or_serious` (`1` if severity is Fatal (1) or Serious (2); `0` if Slight (3)).
+  - **Temporal Handling:**
+    - Derives `collision_date` as `DATE`.
+    - If `time` is valid, derives `collision_time` (`TIME`), `collision_timestamp` (`TIMESTAMP`), and `collision_hour` (`INTEGER`).
+    - If `time` is missing or unparseable, `collision_time`, `collision_timestamp`, and `collision_hour` are strictly set to `NULL` while preserving `collision_date`.
+    - **No Midnight Substitution:** Missing times are never replaced with `00:00:00`, preventing artificial distortion of nighttime collision patterns.
+  - **Collision Severity & Binary Target:**
+    - Fatal (`1`) &rarr; `collision_severity_name = 'Fatal'`, `is_fatal_or_serious = 1`
+    - Serious (`2`) &rarr; `collision_severity_name = 'Serious'`, `is_fatal_or_serious = 1`
+    - Slight (`3`) &rarr; `collision_severity_name = 'Slight'`, `is_fatal_or_serious = 0`
+    - Unexpected / Invalid / Unknown codes &rarr; `collision_severity_name = NULL`, `is_fatal_or_serious = NULL` (strictly prevents defaulting unknown records to Slight).
+  - **Geographic Identifiers:**
+    - Includes `local_authority_ons_district` (primary validated 9-character ONS code; 100% coverage).
+    - Includes `local_authority_highway_current` (current highway authority; 99.99% coverage).
+    - Retains legacy `local_authority_district` for audit purposes (99.96% missing/deprecated).
+  - Maps numerical codes to descriptive category labels (`day_of_week_name`, `road_type_name`, `light_conditions_name`, `weather_conditions_name`, `road_surface_conditions_name`).
   - Handles `-1` sentinel values cleanly by setting numeric nullable fields (e.g. `speed_limit_mph = NULL` when `speed_limit = -1`).
 
 ### 2.2 Vehicle Summary: `agg_vehicle_summary`
 - **Source:** `raw_vehicles`
 - **Grain:** Exactly 1 row per collision (`collision_index` PRIMARY KEY).
-- **Design Rule:** In STATS19, collisions involve between 1 and multiple vehicles. A naive join between collision and vehicle tables would duplicate collision rows. To prevent row multiplication, vehicle-level records are aggregated strictly to the collision grain:
-  - Vehicle mix counts: `pedal_cycle_count`, `motorcycle_count`, `car_taxi_count`, `bus_coach_count`, `goods_vehicle_count`, `hgv_count`.
-  - Vehicle involvement flags: `has_pedal_cycle`, `has_motorcycle`, `has_bus_coach`, `has_hgv`, `has_escooter`, `has_two_wheeled_or_vulnerable_vehicle`.
-  - Driver demographic summaries: `youngest_driver_age`, `oldest_driver_age`, `avg_driver_age`, `has_young_driver` (17-24), `has_older_driver` (70+).
-  - Vehicle characteristics: `newest_vehicle_age`, `oldest_vehicle_age`, `avg_vehicle_age`, `max_engine_capacity_cc`.
-  - Pre-impact dynamic manoeuvres: `has_skidding_or_overturning`, `has_vehicle_leaving_carriageway`, `has_towing_or_articulation`.
+- **Design Rule:** Collisions involve 1 to many vehicles. To prevent row multiplication when joining with collisions, vehicle records are aggregated strictly to the collision grain.
+- **Official Category Definitions:**
+  - **Pedal Cycles:** Strictly `vehicle_type = 1` (`pedal_cycle_count`, `has_pedal_cycle`).
+  - **Ridden Horses:** Strictly `vehicle_type = 16` (`ridden_horse_count`, `has_ridden_horse`). Note: STATS20 assigns code `16` to ridden horses; it is never conflated with pedal cycles.
+  - **Mobility Scooters:** Strictly `vehicle_type = 22` (`mobility_scooter_count`, `has_mobility_scooter`).
+  - **Personal Powered Transporters (PLEVs / e-scooters):** `vehicle_type = 33` or `escooter_flag = 1` (`personal_transporter_count`, `has_personal_transporter`).
+  - **Motorcycles:** `vehicle_type IN (2, 3, 4, 5, 23, 97)` (`motorcycle_count`, `has_motorcycle`), with `electric_motorcycle_count` (`vehicle_type = 23`).
+  - **Cars & Taxis:** `vehicle_type IN (8, 9)` (`car_taxi_count`, `has_car_taxi`).
+  - **Vans / LGVs:** `vehicle_type = 19` (`van_lgv_count`, `has_van_lgv`).
+  - **HGVs:** `vehicle_type IN (20, 21)` (`hgv_count`, `has_hgv`).
+  - **Buses & Coaches:** `vehicle_type IN (10, 11)` (`bus_coach_count`, `has_bus_coach`).
+  - **Other / Unknown Vehicles:** `vehicle_type IN (-1, 99)` (`unknown_vehicle_type_count`).
+- **Driver Demographic Summaries:**
+  - `youngest_driver_age`, `oldest_driver_age`, `avg_driver_age`.
+  - Flags: `has_young_driver` (17–24 years), `has_older_driver` (70+ years).
+- **Vehicle Characteristics & Pre-Impact Dynamics:**
+  - Vehicle age metrics (`newest_vehicle_age`, `oldest_vehicle_age`, `avg_vehicle_age`).
+  - `max_engine_capacity_cc`.
+  - Pre-impact manoeuvre flags: `has_skidding_or_overturning`, `has_vehicle_leaving_carriageway`, `has_towing_or_articulation`, `has_hit_object_off_carriageway`.
 
 ### 2.3 Casualty Summary: `agg_casualty_summary`
 - **Source:** `raw_casualties`
 - **Grain:** Exactly 1 row per collision (`collision_index` PRIMARY KEY).
-- **Design Rule:** Casualty details are post-crash outcomes, not pre-crash predictors. This table is reserved exclusively for injury severity and statistical burden reporting:
-  - Severity counts: `fatal_casualty_count`, `serious_casualty_count`, `slight_casualty_count`, `ksi_casualty_count`.
-  - Casualty classification: `driver_casualty_count`, `passenger_casualty_count`, `pedestrian_casualty_count`, `cyclist_casualty_count`, `motorcyclist_casualty_count`.
-  - Age demographics: `youngest_casualty_age`, `oldest_casualty_age`, `child_casualty_count`, `elderly_casualty_count`.
+- **Design Rule:** Casualty details are post-crash consequences, not pre-crash predictors. This table is reserved exclusively for injury severity and statistical burden reporting.
+- **Official Category Definitions:**
+  - **Severity Metrics:** `fatal_casualty_count`, `serious_casualty_count`, `slight_casualty_count`, `ksi_casualty_count`.
+  - **Severity Flags:** `has_fatal_casualty`, `has_serious_casualty`, `has_ksi_casualty`.
+  - **Casualty Class:** `driver_rider_casualty_count` (`casualty_class = 1`), `passenger_casualty_count` (`casualty_class = 2`), `pedestrian_casualty_count` (`casualty_class = 3` or `casualty_type = 0`).
+  - **Casualty Type Breakdown:**
+    - Cyclists: `casualty_type = 1`
+    - Motorcyclists: `casualty_type IN (2, 3, 4, 5, 23, 97)`
+    - Car occupants: `casualty_type IN (8, 9)`
+    - Bus/coach occupants: `casualty_type IN (10, 11)`
+    - Goods vehicle occupants: `casualty_type IN (19, 20, 21, 98)`
+    - Mobility scooter users: `casualty_type = 22`
+    - Personal light electric vehicle (PLEV) users: `casualty_type = 33` or `escooter_flag = 1`
+    - Horse riders: `casualty_type = 16`
+  - **Vulnerable Road User Flag:** `has_vulnerable_user_casualty` (capturing pedestrians, cyclists, motorcyclists, horse riders, mobility scooters, and PLEVs).
+  - **Age Demographics:** `youngest_casualty_age`, `oldest_casualty_age`, `child_casualty_count` (<16 years), `elderly_casualty_count` (65+ years).
 
 ### 2.4 Analytical Mart: `mart_collision_analytical`
 - **Grain:** 1 row per collision (`collision_index`).
 - **Join:** `stg_collisions c LEFT JOIN agg_vehicle_summary v ON c.collision_index = v.collision_index`.
 - **Integrity Guarantee:** The row count matches `stg_collisions` exactly (513,801 rows). Zero row multiplication occurs.
-- **Separation of Concerns:** Contains **zero casualty outcome columns** or post-crash features, preventing data leakage during future statistical modelling.
+- **Separation of Concerns:** Contains **zero casualty outcome columns** or post-crash features, preventing data leakage during statistical modelling.
 
 ### 2.5 Outcomes Mart: `mart_collision_outcomes`
 - **Grain:** 1 row per collision (`collision_index`).

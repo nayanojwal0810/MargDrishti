@@ -1,5 +1,6 @@
 -- 02_stg_collisions.sql
--- Cleaned, typed collision view with human-readable labels and explicit handling of sentinel values (-1).
+-- Cleaned, typed collision staging view with human-readable labels,
+-- rigorous severity classification, clean missing-time handling, and explicit sentinel codes.
 
 CREATE OR REPLACE VIEW stg_collisions AS
 SELECT
@@ -7,13 +8,21 @@ SELECT
     collision_year,
     CAST(collision_ref_no AS VARCHAR) AS collision_ref_no,
     
-    -- Temporal attributes
-    CAST(date AS DATE) AS collision_date,
+    -- Temporal attributes (preserves date when valid, sets timestamp/hour to NULL if time is missing/invalid)
+    TRY_CAST(date AS DATE) AS collision_date,
     TRY_CAST(time AS TIME) AS collision_time,
-    date_trunc('hour', CAST(date AS DATE) + COALESCE(TRY_CAST(time AS TIME), TIME '00:00:00')) AS collision_timestamp,
-    EXTRACT(YEAR FROM CAST(date AS DATE)) AS derived_year,
-    EXTRACT(MONTH FROM CAST(date AS DATE)) AS collision_month,
-    EXTRACT(HOUR FROM CAST(time AS TIME)) AS collision_hour,
+    CASE
+        WHEN TRY_CAST(date AS DATE) IS NOT NULL AND TRY_CAST(time AS TIME) IS NOT NULL
+        THEN date_trunc('hour', TRY_CAST(date AS DATE) + TRY_CAST(time AS TIME))
+        ELSE NULL
+    END AS collision_timestamp,
+    EXTRACT(YEAR FROM TRY_CAST(date AS DATE)) AS derived_year,
+    EXTRACT(MONTH FROM TRY_CAST(date AS DATE)) AS collision_month,
+    CASE
+        WHEN TRY_CAST(time AS TIME) IS NOT NULL
+        THEN EXTRACT(HOUR FROM TRY_CAST(time AS TIME))
+        ELSE NULL
+    END AS collision_hour,
     day_of_week,
     CASE day_of_week
         WHEN 1 THEN 'Sunday'
@@ -27,15 +36,19 @@ SELECT
     END AS day_of_week_name,
     CASE WHEN day_of_week IN (1, 7) THEN 1 ELSE 0 END AS is_weekend,
     
-    -- Severity definitions
+    -- Collision Severity & Binary Target (strictly maps 1/2 to 1, 3 to 0, and unexpected codes to NULL)
     collision_severity,
     CASE collision_severity
         WHEN 1 THEN 'Fatal'
         WHEN 2 THEN 'Serious'
         WHEN 3 THEN 'Slight'
-        ELSE 'Unknown'
+        ELSE NULL
     END AS collision_severity_name,
-    CASE WHEN collision_severity IN (1, 2) THEN 1 ELSE 0 END AS is_fatal_or_serious, -- Binary KSI
+    CASE
+        WHEN collision_severity IN (1, 2) THEN 1
+        WHEN collision_severity = 3 THEN 0
+        ELSE NULL
+    END AS is_fatal_or_serious, -- Binary KSI target: 1=Fatal/Serious, 0=Slight, NULL=Unknown/Invalid
     
     -- Road environment & geometry
     first_road_class,
@@ -131,17 +144,17 @@ SELECT
     location_easting_osgr,
     location_northing_osgr,
     police_force,
-    local_authority_district,
-    local_authority_ons_district,
+    local_authority_district, -- Deprecated legacy numeric field (99.96% unallocated in 2021-2025)
+    local_authority_ons_district, -- Primary official ONS 9-character district identifier (100% valid coverage)
     local_authority_highway,
-    local_authority_highway_current,
+    local_authority_highway_current, -- Primary official current highway authority code (99.99% valid coverage)
     lsoa_of_accident_location,
     
-    -- Raw recorded counts (recorded at collision scene)
+    -- Raw recorded counts (scene census)
     number_of_vehicles AS recorded_number_of_vehicles,
     number_of_casualties AS recorded_number_of_casualties,
     
-    -- Post-crash response indicators (isolated for quality auditing)
+    -- Post-crash response indicators (isolated for quality audit, NOT for predictive features)
     did_police_officer_attend_scene_of_accident,
     enhanced_severity_collision,
     collision_injury_based

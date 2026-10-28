@@ -1,4 +1,4 @@
-"""End-to-end data pipeline orchestrator for MargDrishti."""
+"""End-to-end official data pipeline orchestrator for MargDrishti."""
 
 import argparse
 import sys
@@ -6,14 +6,13 @@ import time
 from typing import Any, Dict, Optional
 
 from marg_drishti.config import PipelineConfig
-from marg_drishti.validation import DataValidator, ValidationReport
+from marg_drishti.validation import DataValidator
 from marg_drishti.conversion import ParquetConverter
 from marg_drishti.database import DatabaseManager
 
 
 def run_data_pipeline(
     config: Optional[PipelineConfig] = None,
-    convert_research: bool = True,
     overwrite_parquet: bool = True,
 ) -> Dict[str, Any]:
     """Execute complete ingestion, validation, Parquet conversion, and DuckDB mart creation."""
@@ -22,13 +21,13 @@ def run_data_pipeline(
     start_time = time.time()
 
     print("=" * 80)
-    print("MARGDRISHTI: STARTING DATA FOUNDATION PIPELINE")
+    print("MARGDRISHTI: STARTING DATA FOUNDATION PIPELINE (OFFICIAL STATS19)")
     print("=" * 80)
     print(f"Base Directory: {config.base_dir}")
     print(f"DuckDB Target : {config.duckdb_path}")
 
     # Step 1: Validation
-    print("\n--- STEP 1: VALIDATING INPUT DATA ---")
+    print("\n--- STEP 1: VALIDATING OFFICIAL INPUT DATA ---")
     validator = DataValidator(config)
     report = validator.validate_csv_sources()
     print(report.summary_text())
@@ -43,19 +42,13 @@ def run_data_pipeline(
         }
 
     # Step 2: Parquet Conversion
-    print("\n--- STEP 2: CONVERTING CSV DATA TO PARQUET ---")
+    print("\n--- STEP 2: CONVERTING OFFICIAL CSV DATA TO PARQUET ---")
     converter = ParquetConverter(config)
     t0 = time.time()
     converted_files = converter.convert_all_official(overwrite=overwrite_parquet)
     for name, p in converted_files.items():
         size_mb = p.stat().st_size / (1024 * 1024)
         print(f"  Converted {name:<10} -> {p.name} ({size_mb:.2f} MB)")
-
-    if convert_research and config.research_extracted_csv.exists():
-        res_pq = converter.convert_research_dataset(overwrite=overwrite_parquet)
-        if res_pq:
-            res_mb = res_pq.stat().st_size / (1024 * 1024)
-            print(f"  Converted research dataset -> {res_pq.name} ({res_mb:.2f} MB)")
     converter.close()
     print(f"Conversion completed in {time.time() - t0:.2f}s.")
 
@@ -69,7 +62,7 @@ def run_data_pipeline(
     print(f"Database build completed in {time.time() - t0:.2f}s.")
 
     # Step 4: Integrity Verification
-    print("\n--- STEP 4: VERIFYING JOIN AND GRAIN INTEGRITY ---")
+    print("\n--- STEP 4: VERIFYING INTEGRITY AND CONSTRAINTS ---")
     integrity = db.verify_integrity()
     db.close()
 
@@ -79,6 +72,12 @@ def run_data_pipeline(
     print(f"  Row Count Preserved: {'YES' if integrity['row_count_preserved'] else 'NO'}")
     print(f"  Duplicate Keys in Analytical Mart: {integrity['duplicate_mart_keys']}")
     print(f"  Duplicate Keys in Vehicle Summary: {integrity['duplicate_vehicle_summary_keys']}")
+    print(f"  Duplicate Keys in Casualty Summary: {integrity['duplicate_casualty_summary_keys']}")
+    print(f"  Orphaned Vehicle Summaries: {integrity['orphaned_vehicle_summary']}")
+    print(f"  Orphaned Casualty Summaries: {integrity['orphaned_casualty_summary']}")
+    print(f"  Inconsistent Severities: {integrity['inconsistent_severities']}")
+    print(f"  Leaked Casualty Outcomes in Mart: {len(integrity['leaked_outcomes'])}")
+    print(f"  Midnight Substitutions for Missing Times: {integrity['midnight_substitutions']}")
 
     total_time = time.time() - start_time
     success = integrity["is_valid"]
@@ -102,11 +101,6 @@ def main():
     """CLI entrypoint."""
     parser = argparse.ArgumentParser(description="MargDrishti Data Foundation Pipeline")
     parser.add_argument(
-        "--skip-research",
-        action="store_true",
-        help="Skip converting the 2020-2024 research archive dataset",
-    )
-    parser.add_argument(
         "--no-overwrite",
         action="store_true",
         help="Do not overwrite existing Parquet files",
@@ -116,7 +110,6 @@ def main():
     config = PipelineConfig()
     result = run_data_pipeline(
         config=config,
-        convert_research=not args.skip_research,
         overwrite_parquet=not args.no_overwrite,
     )
 

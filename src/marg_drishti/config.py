@@ -1,8 +1,12 @@
-"""Configuration, schema definitions, and lookup codes for MargDrishti."""
+"""Configuration, schema definitions, and lookup codes for MargDrishti.
+
+All definitions align with the official UK Department for Transport STATS19
+and STATS20 specifications.
+"""
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict, List
 
 
 # STATS19 Sentinel code definitions
@@ -27,6 +31,7 @@ COLLISION_REQUIRED_COLUMNS: List[str] = [
     "weather_conditions",
     "road_surface_conditions",
     "urban_or_rural_area",
+    "local_authority_ons_district",
 ]
 
 VEHICLE_REQUIRED_COLUMNS: List[str] = [
@@ -54,21 +59,72 @@ CASUALTY_REQUIRED_COLUMNS: List[str] = [
     "casualty_severity",
 ]
 
-RESEARCH_REQUIRED_COLUMNS: List[str] = [
-    "collision_index",
-    "collision_year",
-    "collision_severity",
-    "number_of_vehicles",
-    "number_of_casualties",
-    "date",
-    "time",
-]
-
-# Code descriptions according to DfT STATS19 Data Dictionary
+# Code descriptions according to DfT STATS19 / STATS20 Data Dictionary
 SEVERITY_LOOKUP: Dict[int, str] = {
     1: "Fatal",
     2: "Serious",
     3: "Slight",
+}
+
+# Official STATS19 Vehicle Type Specification
+VEHICLE_TYPE_LOOKUP: Dict[int, str] = {
+    1: "Pedal cycle",
+    2: "Motorcycle 50cc and under",
+    3: "Motorcycle 125cc and under",
+    4: "Motorcycle over 125cc and up to 500cc",
+    5: "Motorcycle over 500cc",
+    8: "Taxi / Private hire car",
+    9: "Car",
+    10: "Minibus (8 - 16 passenger seats)",
+    11: "Bus or coach (17 or more pass seats)",
+    16: "Ridden horse",
+    17: "Agricultural vehicle",
+    18: "Tram",
+    19: "Van / Goods 3.5 tonnes mgw and under",
+    20: "Goods over 3.5t. and under 7.5t",
+    21: "Goods 7.5 tonnes mgw and over (HGV)",
+    22: "Mobility scooter",
+    23: "Electric motorcycle",
+    33: "Personal light electric vehicle (PLEV)",
+    90: "Other vehicle",
+    97: "Motorcycle - unknown cc",
+    98: "Goods vehicle - unknown weight",
+    99: "Unknown vehicle type",
+    -1: "Missing / Out of range",
+}
+
+# Official STATS19 Casualty Type Specification
+CASUALTY_TYPE_LOOKUP: Dict[int, str] = {
+    0: "Pedestrian",
+    1: "Cyclist",
+    2: "Motorcycle 50cc and under occupant",
+    3: "Motorcycle 125cc and under occupant",
+    4: "Motorcycle 125cc-500cc occupant",
+    5: "Motorcycle over 500cc occupant",
+    8: "Taxi occupant",
+    9: "Car occupant",
+    10: "Minibus occupant",
+    11: "Bus or coach occupant",
+    16: "Horse rider",
+    17: "Agricultural vehicle occupant",
+    18: "Tram occupant",
+    19: "Van / LGV occupant",
+    20: "Goods vehicle 3.5t-7.5t occupant",
+    21: "Heavy goods vehicle (HGV) occupant",
+    22: "Mobility scooter rider",
+    23: "Electric motorcycle occupant",
+    33: "Personal light electric vehicle (PLEV) rider",
+    90: "Other vehicle occupant",
+    97: "Motorcycle (unknown cc) occupant",
+    98: "Goods vehicle (unknown weight) occupant",
+    99: "Unknown vehicle occupant",
+    -1: "Missing / Out of range",
+}
+
+CASUALTY_CLASS_LOOKUP: Dict[int, str] = {
+    1: "Driver or rider",
+    2: "Vehicle or pillion passenger",
+    3: "Pedestrian",
 }
 
 ROAD_TYPE_LOOKUP: Dict[int, str] = {
@@ -115,33 +171,28 @@ ROAD_SURFACE_LOOKUP: Dict[int, str] = {
     -1: "Missing / Out of range",
 }
 
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_SQL_DIR = PROJECT_ROOT / "sql"
 
 
 @dataclass
 class PipelineConfig:
-    """Configuration paths for MargDrishti data pipeline."""
+    """Configuration paths for MargDrishti official data pipeline."""
 
     base_dir: Path = field(default_factory=lambda: Path.cwd())
 
-    # Raw Data Paths
+    # Raw Data Paths (Official STATS19 CSVs only)
     raw_official_dir: Path = field(init=False)
-    raw_paper_dir: Path = field(init=False)
     official_collision_csv: Path = field(init=False)
     official_vehicle_csv: Path = field(init=False)
     official_casualty_csv: Path = field(init=False)
-    research_archive_rar: Path = field(init=False)
-    research_extracted_csv: Path = field(init=False)
 
-    # Processed Data Paths
+    # Processed Data Paths (Parquet)
     processed_dir: Path = field(init=False)
     parquet_dir: Path = field(init=False)
     official_collision_parquet: Path = field(init=False)
     official_vehicle_parquet: Path = field(init=False)
     official_casualty_parquet: Path = field(init=False)
-    research_collision_parquet: Path = field(init=False)
 
     # Database Path
     duckdb_path: Path = field(init=False)
@@ -150,10 +201,8 @@ class PipelineConfig:
     sql_dir: Path = DEFAULT_SQL_DIR
 
     def __post_init__(self):
-        # Resolve raw paths
+        # Resolve raw official paths
         self.raw_official_dir = self.base_dir / "data" / "raw" / "official_stats19"
-        self.raw_paper_dir = self.base_dir / "data" / "raw" / "paper_replication"
-
         self.official_collision_csv = (
             self.raw_official_dir / "dft-road-casualty-statistics-collision-last-5-years.csv"
         )
@@ -164,18 +213,12 @@ class PipelineConfig:
             self.raw_official_dir / "dft-road-casualty-statistics-casualty-last-5-years.csv"
         )
 
-        self.research_archive_rar = self.raw_paper_dir / "journal.pone.0347873.s002.rar"
-        self.research_extracted_csv = (
-            self.base_dir / ".local_audit" / "extracted" / "UKdata.csv"
-        )
-
         # Resolve processed paths
         self.processed_dir = self.base_dir / "data" / "processed"
         self.parquet_dir = self.processed_dir / "parquet"
         self.official_collision_parquet = self.parquet_dir / "official_collision_2021_2025.parquet"
         self.official_vehicle_parquet = self.parquet_dir / "official_vehicle_2021_2025.parquet"
         self.official_casualty_parquet = self.parquet_dir / "official_casualty_2021_2025.parquet"
-        self.research_collision_parquet = self.parquet_dir / "research_collision_2020_2024.parquet"
 
         self.duckdb_path = self.processed_dir / "marg_drishti.duckdb"
 

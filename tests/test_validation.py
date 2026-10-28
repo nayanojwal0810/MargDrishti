@@ -20,9 +20,9 @@ def test_validation_passes_on_valid_synthetic_data(synthetic_data_dir):
     assert report.duplicate_collision_ids == 0
     assert report.orphaned_vehicles == 0
     assert report.orphaned_casualties == 0
-    assert report.row_counts["collision"] == 5
-    assert report.row_counts["vehicle"] == 8
-    assert report.row_counts["casualty"] == 6
+    assert report.row_counts["collision"] == 6
+    assert report.row_counts["vehicle"] == 11
+    assert report.row_counts["casualty"] == 7
     assert report.collisions_with_vehicles_pct == 100.0
     assert report.collisions_with_casualties_pct == 100.0
 

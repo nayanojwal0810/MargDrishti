@@ -19,12 +19,12 @@ SELECT
     c.day_of_week_name,
     c.is_weekend,
     
-    -- Severity classification
+    -- Severity classification & binary KSI target
     c.collision_severity,
     c.collision_severity_name,
     c.is_fatal_or_serious,
     
-    -- Road geometry & limits
+    -- Road geometry & speed limits
     c.first_road_class,
     c.first_road_class_name,
     c.first_road_number,
@@ -46,31 +46,49 @@ SELECT
     c.urban_or_rural_area,
     c.urban_or_rural_area_name,
     
-    -- Location & administration
+    -- Location & geographic identifiers
     c.latitude,
     c.longitude,
+    c.location_easting_osgr,
+    c.location_northing_osgr,
     c.police_force,
     c.local_authority_district,
-    c.local_authority_ons_district,
+    c.local_authority_ons_district, -- Primary validated district code (100% coverage)
     c.local_authority_highway,
+    c.local_authority_highway_current, -- Primary current highway authority (99.99% coverage)
     c.lsoa_of_accident_location,
     
     -- Aggregated vehicle attributes (1:1 from agg_vehicle_summary)
     COALESCE(v.total_vehicles_in_dataset, c.recorded_number_of_vehicles) AS total_vehicles,
     COALESCE(v.pedal_cycle_count, 0) AS pedal_cycle_count,
     COALESCE(v.motorcycle_count, 0) AS motorcycle_count,
+    COALESCE(v.electric_motorcycle_count, 0) AS electric_motorcycle_count,
     COALESCE(v.car_taxi_count, 0) AS car_taxi_count,
     COALESCE(v.bus_coach_count, 0) AS bus_coach_count,
-    COALESCE(v.goods_vehicle_count, 0) AS goods_vehicle_count,
+    COALESCE(v.van_lgv_count, 0) AS van_lgv_count,
     COALESCE(v.hgv_count, 0) AS hgv_count,
+    COALESCE(v.goods_vehicle_count, 0) AS goods_vehicle_count,
+    COALESCE(v.ridden_horse_count, 0) AS ridden_horse_count,
+    COALESCE(v.agricultural_vehicle_count, 0) AS agricultural_vehicle_count,
+    COALESCE(v.mobility_scooter_count, 0) AS mobility_scooter_count,
+    COALESCE(v.personal_transporter_count, 0) AS personal_transporter_count,
+    COALESCE(v.other_vehicle_count, 0) AS other_vehicle_count,
+    COALESCE(v.unknown_vehicle_type_count, 0) AS unknown_vehicle_type_count,
+    
     COALESCE(v.has_pedal_cycle, 0) AS has_pedal_cycle,
     COALESCE(v.has_motorcycle, 0) AS has_motorcycle,
+    COALESCE(v.has_electric_motorcycle, 0) AS has_electric_motorcycle,
     COALESCE(v.has_car_taxi, 0) AS has_car_taxi,
     COALESCE(v.has_bus_coach, 0) AS has_bus_coach,
-    COALESCE(v.has_goods_vehicle, 0) AS has_goods_vehicle,
+    COALESCE(v.has_van_lgv, 0) AS has_van_lgv,
     COALESCE(v.has_hgv, 0) AS has_hgv,
-    COALESCE(v.has_escooter, 0) AS has_escooter,
-    COALESCE(v.has_two_wheeled_or_vulnerable_vehicle, 0) AS has_two_wheeled_or_vulnerable_vehicle,
+    COALESCE(v.has_goods_vehicle, 0) AS has_goods_vehicle,
+    COALESCE(v.has_ridden_horse, 0) AS has_ridden_horse,
+    COALESCE(v.has_agricultural_vehicle, 0) AS has_agricultural_vehicle,
+    COALESCE(v.has_mobility_scooter, 0) AS has_mobility_scooter,
+    COALESCE(v.has_personal_transporter, 0) AS has_personal_transporter,
+    COALESCE(v.has_unknown_vehicle_type, 0) AS has_unknown_vehicle_type,
+    COALESCE(v.has_vulnerable_road_user_vehicle, 0) AS has_vulnerable_road_user_vehicle,
     
     v.youngest_driver_age,
     v.oldest_driver_age,
@@ -106,7 +124,8 @@ SELECT
     c.collision_severity_name,
     c.is_fatal_or_serious,
     c.police_force,
-    c.local_authority_district,
+    c.local_authority_ons_district,
+    c.local_authority_highway_current,
     c.urban_or_rural_area_name,
     
     -- Casualty metrics (1:1 from agg_casualty_summary)
@@ -116,13 +135,20 @@ SELECT
     COALESCE(k.slight_casualty_count, 0) AS slight_casualty_count,
     COALESCE(k.ksi_casualty_count, 0) AS ksi_casualty_count,
     COALESCE(k.has_fatal_casualty, 0) AS has_fatal_casualty,
+    COALESCE(k.has_serious_casualty, 0) AS has_serious_casualty,
     COALESCE(k.has_ksi_casualty, 0) AS has_ksi_casualty,
     
-    COALESCE(k.driver_casualty_count, 0) AS driver_casualty_count,
+    COALESCE(k.driver_rider_casualty_count, 0) AS driver_rider_casualty_count,
     COALESCE(k.passenger_casualty_count, 0) AS passenger_casualty_count,
     COALESCE(k.pedestrian_casualty_count, 0) AS pedestrian_casualty_count,
     COALESCE(k.cyclist_casualty_count, 0) AS cyclist_casualty_count,
     COALESCE(k.motorcyclist_casualty_count, 0) AS motorcyclist_casualty_count,
+    COALESCE(k.car_occupant_casualty_count, 0) AS car_occupant_casualty_count,
+    COALESCE(k.bus_coach_casualty_count, 0) AS bus_coach_casualty_count,
+    COALESCE(k.goods_vehicle_casualty_count, 0) AS goods_vehicle_casualty_count,
+    COALESCE(k.mobility_scooter_casualty_count, 0) AS mobility_scooter_casualty_count,
+    COALESCE(k.personal_transporter_casualty_count, 0) AS personal_transporter_casualty_count,
+    COALESCE(k.horse_rider_casualty_count, 0) AS horse_rider_casualty_count,
     COALESCE(k.has_vulnerable_user_casualty, 0) AS has_vulnerable_user_casualty,
     
     k.youngest_casualty_age,

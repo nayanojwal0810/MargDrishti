@@ -1,4 +1,4 @@
-"""High-performance CSV to Parquet conversion using DuckDB."""
+"""High-performance CSV to Parquet conversion for official STATS19 data using DuckDB."""
 
 from pathlib import Path
 from typing import Dict, Optional
@@ -8,7 +8,7 @@ from marg_drishti.config import PipelineConfig
 
 
 class ParquetConverter:
-    """Converts raw official and research CSV files into compressed Parquet files."""
+    """Converts raw official STATS19 CSV files into compressed Parquet files."""
 
     def __init__(self, config: Optional[PipelineConfig] = None):
         self.config = config or PipelineConfig()
@@ -52,7 +52,7 @@ class ParquetConverter:
         return parquet_path
 
     def convert_all_official(self, overwrite: bool = True) -> Dict[str, Path]:
-        """Convert all official STATS19 CSV files to Parquet."""
+        """Convert all official STATS19 CSV files (collision, vehicle, casualty) to Parquet."""
         self.config.ensure_directories()
         results = {}
 
@@ -67,14 +67,3 @@ class ParquetConverter:
             results[name] = pq
 
         return results
-
-    def convert_research_dataset(self, overwrite: bool = True) -> Optional[Path]:
-        """Convert research extracted UKdata.csv to Parquet if available."""
-        if self.config.research_extracted_csv.exists():
-            self.config.ensure_directories()
-            return self.convert_csv_to_parquet(
-                self.config.research_extracted_csv,
-                self.config.research_collision_parquet,
-                overwrite=overwrite,
-            )
-        return None

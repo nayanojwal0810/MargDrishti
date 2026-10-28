@@ -1,28 +1,30 @@
-"""Pytest fixtures with small synthetic datasets for testing MargDrishti."""
+"""Pytest fixtures with small synthetic datasets for testing MargDrishti.
+
+All fixtures contain official STATS19 schemas and representative edge cases
+(valid/missing/invalid times, severity codes 1/2/3 and invalid, vehicle types
+including pedal cycles, ridden horses, mobility scooters, and personal transporters).
+"""
 
 import csv
 import hashlib
 from pathlib import Path
-from typing import Dict, Generator, Tuple
+from typing import Dict, Generator
 import pytest
-
-from marg_drishti.config import PipelineConfig
 
 
 @pytest.fixture
 def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]:
-    """Create a temporary directory structure with small synthetic STATS19 CSV datasets."""
+    """Create a temporary directory structure with small synthetic official STATS19 CSV datasets."""
     raw_official = tmp_path / "data" / "raw" / "official_stats19"
-    raw_paper = tmp_path / "data" / "raw" / "paper_replication"
     raw_official.mkdir(parents=True, exist_ok=True)
-    raw_paper.mkdir(parents=True, exist_ok=True)
 
     coll_csv = raw_official / "dft-road-casualty-statistics-collision-last-5-years.csv"
     veh_csv = raw_official / "dft-road-casualty-statistics-vehicle-last-5-years.csv"
     cas_csv = raw_official / "dft-road-casualty-statistics-casualty-last-5-years.csv"
 
-    # 1. Synthetic Collisions (5 collisions)
+    # 1. Synthetic Collisions (6 collisions covering all severity and time edge cases)
     coll_rows = [
+        # Collision 1: Fatal (1), Valid time (14:30)
         {
             "collision_index": "202101000001",
             "collision_year": 2021,
@@ -37,14 +39,14 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "number_of_casualties": 1,
             "date": "2021-03-15",
             "day_of_week": 2,  # Monday
-            "time": "14:30",
-            "local_authority_district": 1,
+            "time": "14:30",  # Valid time
+            "local_authority_district": -1,
             "local_authority_ons_district": "E09000001",
             "local_authority_highway": "E09000001",
             "local_authority_highway_current": "E09000001",
-            "first_road_class": 3,  # A road
+            "first_road_class": 3,
             "first_road_number": 1,
-            "road_type": 6,  # Single carriageway
+            "road_type": 6,
             "speed_limit": 30,
             "junction_detail_historic": 0,
             "junction_detail": 0,
@@ -54,13 +56,13 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "pedestrian_crossing_human_control_historic": 0,
             "pedestrian_crossing_physical_facilities_historic": 0,
             "pedestrian_crossing": 0,
-            "light_conditions": 1,  # Daylight
-            "weather_conditions": 1,  # Fine
-            "road_surface_conditions": 1,  # Dry
+            "light_conditions": 1,
+            "weather_conditions": 1,
+            "road_surface_conditions": 1,
             "special_conditions_at_site": 0,
             "carriageway_hazards_historic": 0,
             "carriageway_hazards": 0,
-            "urban_or_rural_area": 1,  # Urban
+            "urban_or_rural_area": 1,
             "did_police_officer_attend_scene_of_accident": 1,
             "trunk_road_flag": 2,
             "lsoa_of_accident_location": "E01000001",
@@ -69,6 +71,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "collision_adjusted_severity_serious": 0.0,
             "collision_adjusted_severity_slight": 0.0,
         },
+        # Collision 2: Serious (2), Valid time (22:15)
         {
             "collision_index": "202101000002",
             "collision_year": 2021,
@@ -83,14 +86,14 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "number_of_casualties": 1,
             "date": "2021-04-10",
             "day_of_week": 7,  # Saturday
-            "time": "22:15",
-            "local_authority_district": 1,
+            "time": "22:15",  # Valid time
+            "local_authority_district": -1,
             "local_authority_ons_district": "E09000001",
             "local_authority_highway": "E09000001",
             "local_authority_highway_current": "E09000001",
-            "first_road_class": 1,  # Motorway
+            "first_road_class": 1,
             "first_road_number": 4,
-            "road_type": 3,  # Dual carriageway
+            "road_type": 3,
             "speed_limit": 70,
             "junction_detail_historic": 0,
             "junction_detail": 0,
@@ -100,13 +103,13 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "pedestrian_crossing_human_control_historic": 0,
             "pedestrian_crossing_physical_facilities_historic": 0,
             "pedestrian_crossing": 0,
-            "light_conditions": 4,  # Darkness - lit
-            "weather_conditions": 2,  # Raining
-            "road_surface_conditions": 2,  # Wet
+            "light_conditions": 4,
+            "weather_conditions": 2,
+            "road_surface_conditions": 2,
             "special_conditions_at_site": 0,
             "carriageway_hazards_historic": 0,
             "carriageway_hazards": 0,
-            "urban_or_rural_area": 2,  # Rural
+            "urban_or_rural_area": 2,
             "did_police_officer_attend_scene_of_accident": 1,
             "trunk_road_flag": 1,
             "lsoa_of_accident_location": "E01000002",
@@ -115,6 +118,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "collision_adjusted_severity_serious": 1.0,
             "collision_adjusted_severity_slight": 0.0,
         },
+        # Collision 3: Slight (3), Valid time (08:45), Sentinel speed limit (-1)
         {
             "collision_index": "202101000003",
             "collision_year": 2021,
@@ -125,18 +129,18 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "latitude": 51.52,
             "police_force": 1,
             "collision_severity": 3,  # Slight
-            "number_of_vehicles": 3,
+            "number_of_vehicles": 4,  # Car, Van, Pedal cycle, Ridden horse
             "number_of_casualties": 2,
             "date": "2021-05-20",
-            "day_of_week": 5,  # Thursday
+            "day_of_week": 5,
             "time": "08:45",
-            "local_authority_district": 1,
+            "local_authority_district": -1,
             "local_authority_ons_district": "E09000001",
             "local_authority_highway": "E09000001",
             "local_authority_highway_current": "E09000001",
-            "first_road_class": 4,  # B road
+            "first_road_class": 4,
             "first_road_number": 200,
-            "road_type": 1,  # Roundabout
+            "road_type": 1,
             "speed_limit": -1,  # Unknown sentinel
             "junction_detail_historic": 1,
             "junction_detail": 1,
@@ -161,6 +165,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "collision_adjusted_severity_serious": 0.0,
             "collision_adjusted_severity_slight": 1.0,
         },
+        # Collision 4: Slight (3), Missing time (""), Mobility scooter involved
         {
             "collision_index": "202201000004",
             "collision_year": 2022,
@@ -175,12 +180,12 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "number_of_casualties": 1,
             "date": "2022-07-04",
             "day_of_week": 2,
-            "time": "12:00",
-            "local_authority_district": 2,
+            "time": "",  # Missing time (empty string)
+            "local_authority_district": -1,
             "local_authority_ons_district": "E09000002",
             "local_authority_highway": "E09000002",
             "local_authority_highway_current": "E09000002",
-            "first_road_class": 6,  # Unclassified
+            "first_road_class": 6,
             "first_road_number": 0,
             "road_type": 6,
             "speed_limit": 20,
@@ -207,6 +212,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "collision_adjusted_severity_serious": 0.0,
             "collision_adjusted_severity_slight": 1.0,
         },
+        # Collision 5: Serious (2), Invalid time ("99:99"), Bus & PLEV involved
         {
             "collision_index": "202301000005",
             "collision_year": 2023,
@@ -217,12 +223,12 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "latitude": 51.54,
             "police_force": 2,
             "collision_severity": 2,  # Serious
-            "number_of_vehicles": 1,
+            "number_of_vehicles": 2,
             "number_of_casualties": 1,
             "date": "2023-11-12",
-            "day_of_week": 1,  # Sunday
-            "time": "19:30",
-            "local_authority_district": 2,
+            "day_of_week": 1,
+            "time": "99:99",  # Invalid time
+            "local_authority_district": -1,
             "local_authority_ons_district": "E09000002",
             "local_authority_highway": "E09000002",
             "local_authority_highway_current": "E09000002",
@@ -238,9 +244,9 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "pedestrian_crossing_human_control_historic": 0,
             "pedestrian_crossing_physical_facilities_historic": 0,
             "pedestrian_crossing": 0,
-            "light_conditions": 6,  # Darkness - no lights
-            "weather_conditions": 7,  # Fog
-            "road_surface_conditions": 4,  # Ice
+            "light_conditions": 6,
+            "weather_conditions": 7,
+            "road_surface_conditions": 4,
             "special_conditions_at_site": 0,
             "carriageway_hazards_historic": 0,
             "carriageway_hazards": 0,
@@ -253,6 +259,53 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "collision_adjusted_severity_serious": 1.0,
             "collision_adjusted_severity_slight": 0.0,
         },
+        # Collision 6: Unknown/Invalid Severity (9), Valid time
+        {
+            "collision_index": "202301000006",
+            "collision_year": 2023,
+            "collision_ref_no": "REF006",
+            "location_easting_osgr": 535000,
+            "location_northing_osgr": 185000,
+            "longitude": -0.07,
+            "latitude": 51.55,
+            "police_force": 2,
+            "collision_severity": 9,  # Unknown / invalid severity code!
+            "number_of_vehicles": 1,
+            "number_of_casualties": 1,
+            "date": "2023-12-01",
+            "day_of_week": 6,
+            "time": "16:45",
+            "local_authority_district": -1,
+            "local_authority_ons_district": "E09000002",
+            "local_authority_highway": "E09000002",
+            "local_authority_highway_current": "E09000002",
+            "first_road_class": 3,
+            "first_road_number": 20,
+            "road_type": 6,
+            "speed_limit": 30,
+            "junction_detail_historic": 0,
+            "junction_detail": 0,
+            "junction_control": 4,
+            "second_road_class": -1,
+            "second_road_number": -1,
+            "pedestrian_crossing_human_control_historic": 0,
+            "pedestrian_crossing_physical_facilities_historic": 0,
+            "pedestrian_crossing": 0,
+            "light_conditions": 4,
+            "weather_conditions": 1,
+            "road_surface_conditions": 1,
+            "special_conditions_at_site": 0,
+            "carriageway_hazards_historic": 0,
+            "carriageway_hazards": 0,
+            "urban_or_rural_area": 1,
+            "did_police_officer_attend_scene_of_accident": 1,
+            "trunk_road_flag": 2,
+            "lsoa_of_accident_location": "E01000006",
+            "enhanced_severity_collision": -1,
+            "collision_injury_based": 0,
+            "collision_adjusted_severity_serious": 0.0,
+            "collision_adjusted_severity_slight": 0.0,
+        },
     ]
 
     with open(coll_csv, "w", newline="", encoding="utf-8") as f:
@@ -260,7 +313,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
         writer.writeheader()
         writer.writerows(coll_rows)
 
-    # 2. Synthetic Vehicles (8 vehicles mapping to the 5 collisions)
+    # 2. Synthetic Vehicles (11 vehicles across the 6 collisions)
     veh_rows = [
         # Collision 1 (2 vehicles: Car + Motorcycle)
         {
@@ -285,7 +338,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "vehicle_left_hand_drive": 1,
             "journey_purpose_of_driver_historic": 0,
             "journey_purpose_of_driver": 6,
-            "sex_of_driver": 1,  # Male
+            "sex_of_driver": 1,
             "age_of_driver": 45,
             "age_band_of_driver": 7,
             "engine_capacity_cc": 1600,
@@ -320,7 +373,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "journey_purpose_of_driver_historic": 0,
             "journey_purpose_of_driver": 6,
             "sex_of_driver": 1,
-            "age_of_driver": 22,  # Young driver
+            "age_of_driver": 22,
             "age_band_of_driver": 4,
             "engine_capacity_cc": 650,
             "propulsion_code": 1,
@@ -366,7 +419,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "escooter_flag": 0,
             "driver_distance_banding": 2,
         },
-        # Collision 3 (3 vehicles: Car, Van, Pedal cycle)
+        # Collision 3 (4 vehicles: Car, Van, Pedal cycle (1), Ridden horse (16))
         {
             "collision_index": "202101000003",
             "collision_year": 2021,
@@ -389,7 +442,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "vehicle_left_hand_drive": 1,
             "journey_purpose_of_driver_historic": 0,
             "journey_purpose_of_driver": 6,
-            "sex_of_driver": 2,  # Female
+            "sex_of_driver": 2,
             "age_of_driver": 34,
             "age_band_of_driver": 6,
             "engine_capacity_cc": 1400,
@@ -406,7 +459,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "collision_year": 2021,
             "collision_ref_no": "REF003",
             "vehicle_reference": 2,
-            "vehicle_type": 19,  # Van / Goods <=3.5t
+            "vehicle_type": 19,  # Van / LGV
             "towing_and_articulation": 0,
             "vehicle_manoeuvre_historic": 0,
             "vehicle_manoeuvre": 18,
@@ -440,7 +493,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "collision_year": 2021,
             "collision_ref_no": "REF003",
             "vehicle_reference": 3,
-            "vehicle_type": 1,  # Pedal cycle
+            "vehicle_type": 1,  # Pedal cycle (strictly type 1)
             "towing_and_articulation": 0,
             "vehicle_manoeuvre_historic": 0,
             "vehicle_manoeuvre": 18,
@@ -458,7 +511,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "journey_purpose_of_driver_historic": 0,
             "journey_purpose_of_driver": 6,
             "sex_of_driver": 1,
-            "age_of_driver": 72,  # Older cyclist
+            "age_of_driver": 72,
             "age_band_of_driver": 10,
             "engine_capacity_cc": -1,
             "propulsion_code": -1,
@@ -469,13 +522,47 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "escooter_flag": 0,
             "driver_distance_banding": 1,
         },
-        # Collision 4 (1 vehicle: Car)
+        {
+            "collision_index": "202101000003",
+            "collision_year": 2021,
+            "collision_ref_no": "REF003",
+            "vehicle_reference": 4,
+            "vehicle_type": 16,  # Ridden horse (must NOT be counted as pedal cycle!)
+            "towing_and_articulation": 0,
+            "vehicle_manoeuvre_historic": 0,
+            "vehicle_manoeuvre": 18,
+            "vehicle_direction_from": 3,
+            "vehicle_direction_to": 7,
+            "vehicle_location_restricted_lane_historic": 0,
+            "vehicle_location_restricted_lane": 0,
+            "junction_location": 1,
+            "skidding_and_overturning": 0,
+            "hit_object_in_carriageway": 0,
+            "vehicle_leaving_carriageway": 0,
+            "hit_object_off_carriageway": 0,
+            "first_point_of_impact": 2,
+            "vehicle_left_hand_drive": 1,
+            "journey_purpose_of_driver_historic": 0,
+            "journey_purpose_of_driver": 6,
+            "sex_of_driver": 2,
+            "age_of_driver": 28,
+            "age_band_of_driver": 5,
+            "engine_capacity_cc": -1,
+            "propulsion_code": -1,
+            "age_of_vehicle": -1,
+            "generic_make_model": "HORSE",
+            "driver_imd_decile": 8,
+            "lsoa_of_driver": "E01000006",
+            "escooter_flag": 0,
+            "driver_distance_banding": 1,
+        },
+        # Collision 4 (1 vehicle: Mobility scooter (22))
         {
             "collision_index": "202201000004",
             "collision_year": 2022,
             "collision_ref_no": "REF004",
             "vehicle_reference": 1,
-            "vehicle_type": 9,
+            "vehicle_type": 22,  # Mobility scooter
             "towing_and_articulation": 0,
             "vehicle_manoeuvre_historic": 0,
             "vehicle_manoeuvre": 18,
@@ -493,18 +580,18 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "journey_purpose_of_driver_historic": 0,
             "journey_purpose_of_driver": 6,
             "sex_of_driver": 2,
-            "age_of_driver": 60,
-            "age_band_of_driver": 9,
-            "engine_capacity_cc": 1200,
-            "propulsion_code": 1,
-            "age_of_vehicle": 10,
-            "generic_make_model": "NISSAN MICRA",
+            "age_of_driver": 78,
+            "age_band_of_driver": 11,
+            "engine_capacity_cc": -1,
+            "propulsion_code": -1,
+            "age_of_vehicle": 3,
+            "generic_make_model": "PRIDE MOBILITY",
             "driver_imd_decile": 3,
             "lsoa_of_driver": "E01000007",
             "escooter_flag": 0,
             "driver_distance_banding": 1,
         },
-        # Collision 5 (1 vehicle: Bus)
+        # Collision 5 (2 vehicles: Bus (11) + Personal transporter / PLEV (33))
         {
             "collision_index": "202301000005",
             "collision_year": 2023,
@@ -539,6 +626,75 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "escooter_flag": 0,
             "driver_distance_banding": -1,
         },
+        {
+            "collision_index": "202301000005",
+            "collision_year": 2023,
+            "collision_ref_no": "REF005",
+            "vehicle_reference": 2,
+            "vehicle_type": 33,  # PLEV / Personal transporter / e-scooter
+            "towing_and_articulation": 0,
+            "vehicle_manoeuvre_historic": 0,
+            "vehicle_manoeuvre": 18,
+            "vehicle_direction_from": 5,
+            "vehicle_direction_to": 1,
+            "vehicle_location_restricted_lane_historic": 0,
+            "vehicle_location_restricted_lane": 0,
+            "junction_location": 0,
+            "skidding_and_overturning": 0,
+            "hit_object_in_carriageway": 0,
+            "vehicle_leaving_carriageway": 0,
+            "hit_object_off_carriageway": 0,
+            "first_point_of_impact": 1,
+            "vehicle_left_hand_drive": 1,
+            "journey_purpose_of_driver_historic": 0,
+            "journey_purpose_of_driver": 6,
+            "sex_of_driver": 1,
+            "age_of_driver": 21,
+            "age_band_of_driver": 4,
+            "engine_capacity_cc": -1,
+            "propulsion_code": -1,
+            "age_of_vehicle": 1,
+            "generic_make_model": "XIAOMI PRO 2",
+            "driver_imd_decile": 4,
+            "lsoa_of_driver": "E01000008",
+            "escooter_flag": 1,
+            "driver_distance_banding": 1,
+        },
+        # Collision 6 (1 vehicle: Car)
+        {
+            "collision_index": "202301000006",
+            "collision_year": 2023,
+            "collision_ref_no": "REF006",
+            "vehicle_reference": 1,
+            "vehicle_type": 9,  # Car
+            "towing_and_articulation": 0,
+            "vehicle_manoeuvre_historic": 0,
+            "vehicle_manoeuvre": 18,
+            "vehicle_direction_from": 1,
+            "vehicle_direction_to": 5,
+            "vehicle_location_restricted_lane_historic": 0,
+            "vehicle_location_restricted_lane": 0,
+            "junction_location": 0,
+            "skidding_and_overturning": 0,
+            "hit_object_in_carriageway": 0,
+            "vehicle_leaving_carriageway": 0,
+            "hit_object_off_carriageway": 0,
+            "first_point_of_impact": 1,
+            "vehicle_left_hand_drive": 1,
+            "journey_purpose_of_driver_historic": 0,
+            "journey_purpose_of_driver": 6,
+            "sex_of_driver": 1,
+            "age_of_driver": 40,
+            "age_band_of_driver": 7,
+            "engine_capacity_cc": 1800,
+            "propulsion_code": 1,
+            "age_of_vehicle": 4,
+            "generic_make_model": "TOYOTA COROLLA",
+            "driver_imd_decile": 5,
+            "lsoa_of_driver": "E01000006",
+            "escooter_flag": 0,
+            "driver_distance_banding": 1,
+        },
     ]
 
     with open(veh_csv, "w", newline="", encoding="utf-8") as f:
@@ -546,7 +702,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
         writer.writeheader()
         writer.writerows(veh_rows)
 
-    # 3. Synthetic Casualties (6 casualties mapping to the 5 collisions)
+    # 3. Synthetic Casualties (7 casualties across the 6 collisions)
     cas_rows = [
         # Collision 1: 1 Fatal casualty (motorcyclist rider)
         {
@@ -555,7 +711,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "collision_ref_no": "REF001",
             "vehicle_reference": 2,
             "casualty_reference": 1,
-            "casualty_class": 1,  # Driver or rider
+            "casualty_class": 1,
             "sex_of_casualty": 1,
             "age_of_casualty": 22,
             "age_band_of_casualty": 4,
@@ -565,7 +721,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "car_passenger": 0,
             "bus_or_coach_passenger": 0,
             "pedestrian_road_maintenance_worker": 0,
-            "casualty_type": 5,  # Motorcycle
+            "casualty_type": 5,  # Motorcycle occupant
             "casualty_imd_decile": 4,
             "lsoa_of_casualty": "E01000002",
             "enhanced_casualty_severity": 1,
@@ -635,7 +791,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "collision_ref_no": "REF003",
             "vehicle_reference": 1,
             "casualty_reference": 2,
-            "casualty_class": 2,  # Passenger
+            "casualty_class": 2,
             "sex_of_casualty": 2,
             "age_of_casualty": 12,  # Child
             "age_band_of_casualty": 2,
@@ -645,7 +801,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "car_passenger": 1,
             "bus_or_coach_passenger": 0,
             "pedestrian_road_maintenance_worker": 0,
-            "casualty_type": 9,
+            "casualty_type": 9,  # Car occupant
             "casualty_imd_decile": 7,
             "lsoa_of_casualty": "E01000004",
             "enhanced_casualty_severity": 3,
@@ -691,7 +847,7 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "casualty_reference": 1,
             "casualty_class": 2,  # Passenger
             "sex_of_casualty": 1,
-            "age_of_casualty": 68,  # Elderly
+            "age_of_casualty": 68,
             "age_band_of_casualty": 10,
             "casualty_severity": 2,  # Serious
             "pedestrian_location": 0,
@@ -699,13 +855,40 @@ def synthetic_data_dir(tmp_path: Path) -> Generator[Dict[str, Path], None, None]
             "car_passenger": 0,
             "bus_or_coach_passenger": 1,
             "pedestrian_road_maintenance_worker": 0,
-            "casualty_type": 11,
+            "casualty_type": 11,  # Bus occupant
             "casualty_imd_decile": 5,
             "lsoa_of_casualty": "E01000008",
             "enhanced_casualty_severity": 2,
             "casualty_injury_based": 1,
             "casualty_adjusted_severity_serious": 1.0,
             "casualty_adjusted_severity_slight": 0.0,
+            "casualty_distance_banding": 1,
+            "escooter_flag": 0,
+        },
+        # Collision 6: 1 Slight casualty
+        {
+            "collision_index": "202301000006",
+            "collision_year": 2023,
+            "collision_ref_no": "REF006",
+            "vehicle_reference": 1,
+            "casualty_reference": 1,
+            "casualty_class": 1,
+            "sex_of_casualty": 1,
+            "age_of_casualty": 40,
+            "age_band_of_casualty": 7,
+            "casualty_severity": 3,  # Slight
+            "pedestrian_location": 0,
+            "pedestrian_movement": 0,
+            "car_passenger": 0,
+            "bus_or_coach_passenger": 0,
+            "pedestrian_road_maintenance_worker": 0,
+            "casualty_type": 9,  # Car occupant
+            "casualty_imd_decile": 5,
+            "lsoa_of_casualty": "E01000006",
+            "enhanced_casualty_severity": 3,
+            "casualty_injury_based": 0,
+            "casualty_adjusted_severity_serious": 0.0,
+            "casualty_adjusted_severity_slight": 1.0,
             "casualty_distance_banding": 1,
             "escooter_flag": 0,
         },

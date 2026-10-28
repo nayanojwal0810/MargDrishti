@@ -1,8 +1,10 @@
-"""Data validation and data quality profiling for MargDrishti."""
+"""Data validation and data quality profiling for MargDrishti.
+
+Validates official DfT STATS19 CSV files, integrity constraints, and sentinel codes.
+"""
 
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 import duckdb
 
 from marg_drishti.config import (
@@ -40,7 +42,7 @@ class ValidationReport:
         status = "PASSED" if self.is_valid else "FAILED"
         lines = [
             f"=== DATA VALIDATION REPORT [{status}] ===",
-            f"Files Checked: {len(self.files_present)} ({sum(self.files_present.values())} present)",
+            f"Official Files Checked: {len(self.files_present)} ({sum(self.files_present.values())} present)",
         ]
         for f, present in self.files_present.items():
             lines.append(f"  - {f}: {'PRESENT' if present else 'MISSING'}")
@@ -75,7 +77,7 @@ class ValidationReport:
 
 
 class DataValidator:
-    """Performs schema, integrity, and quality checks on raw or converted data."""
+    """Performs schema, integrity, and quality checks on official STATS19 CSV data."""
 
     def __init__(self, config: Optional[PipelineConfig] = None):
         self.config = config or PipelineConfig()
@@ -86,13 +88,11 @@ class DataValidator:
         self.con.close()
 
     def check_file_existence(self) -> Dict[str, bool]:
-        """Check presence of required raw data files."""
+        """Check presence of required official STATS19 CSV files."""
         return {
             "official_collision_csv": self.config.official_collision_csv.exists(),
             "official_vehicle_csv": self.config.official_vehicle_csv.exists(),
             "official_casualty_csv": self.config.official_casualty_csv.exists(),
-            "research_archive_rar": self.config.research_archive_rar.exists(),
-            "research_extracted_csv": self.config.research_extracted_csv.exists(),
         }
 
     def validate_csv_sources(self) -> ValidationReport:
@@ -100,7 +100,7 @@ class DataValidator:
         report = ValidationReport()
         report.files_present = self.check_file_existence()
 
-        # Check critical official files
+        # Check all three official files
         for key in ["official_collision_csv", "official_vehicle_csv", "official_casualty_csv"]:
             if not report.files_present.get(key, False):
                 report.is_valid = False
@@ -200,14 +200,15 @@ class DataValidator:
         check_cols = [
             "speed_limit", "road_type", "light_conditions",
             "weather_conditions", "road_surface_conditions",
-            "junction_control", "local_authority_district"
+            "junction_control", "local_authority_district",
+            "local_authority_ons_district"
         ]
         report.missing_values["collision"] = {}
         report.sentinel_unknown_values["collision"] = {}
 
         for col in check_cols:
             null_count = self.con.execute(f"SELECT COUNT(*) FROM '{coll_path}' WHERE {col} IS NULL").fetchone()[0]
-            neg1_count = self.con.execute(f"SELECT COUNT(*) FROM '{coll_path}' WHERE {col} = {SENTINEL_UNKNOWN_CODE}").fetchone()[0]
+            neg1_count = self.con.execute(f"SELECT COUNT(*) FROM '{coll_path}' WHERE CAST({col} AS VARCHAR) IN ('-1', '-1.0')").fetchone()[0]
             report.missing_values["collision"][col] = null_count
             report.sentinel_unknown_values["collision"][col] = neg1_count
             if neg1_count > 0:

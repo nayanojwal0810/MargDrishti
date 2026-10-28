@@ -20,14 +20,14 @@ def test_full_pipeline_synthetic_execution_and_raw_data_immutability(synthetic_d
     }
 
     # Execute pipeline
-    result = run_data_pipeline(config=config, convert_research=False, overwrite_parquet=True)
+    result = run_data_pipeline(config=config, overwrite_parquet=True)
 
     # 1. Assert pipeline success
     assert result["success"] is True
     assert result["integrity"]["is_valid"] is True
-    assert result["row_counts"]["stg_collisions"] == 5
-    assert result["row_counts"]["mart_collision_analytical"] == 5
-    assert result["row_counts"]["mart_collision_outcomes"] == 5
+    assert result["row_counts"]["stg_collisions"] == 6
+    assert result["row_counts"]["mart_collision_analytical"] == 6
+    assert result["row_counts"]["mart_collision_outcomes"] == 6
 
     # 2. Assert raw data files remain strictly unchanged
     hashes_after = {

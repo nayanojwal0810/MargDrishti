@@ -27,6 +27,6 @@ def test_parquet_conversion_official(synthetic_data_dir):
     cas_count = con.execute(f"SELECT COUNT(*) FROM read_parquet('{results['casualty']}')").fetchone()[0]
     con.close()
 
-    assert coll_count == 5
-    assert veh_count == 8
-    assert cas_count == 6
+    assert coll_count == 6
+    assert veh_count == 11
+    assert cas_count == 7

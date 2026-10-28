@@ -42,7 +42,7 @@ Power BI will present the validated analytical results in a clear, interactive r
 
 ## Data sources
 
-The project uses UK Department for Transport road-safety records and a published research dataset. The implementation will document source links, coverage, definitions, and limitations.
+The project uses official UK Department for Transport road-safety records (STATS19). The implementation documents source links, coverage, definitions, and limitations.
 
 ## Responsible interpretation
 
@@ -65,12 +65,10 @@ Place raw data files in the designated raw directories:
 ```
 data/
 └── raw/
-    ├── official_stats19/
-    │   ├── dft-road-casualty-statistics-collision-last-5-years.csv
-    │   ├── dft-road-casualty-statistics-vehicle-last-5-years.csv
-    │   └── dft-road-casualty-statistics-casualty-last-5-years.csv
-    └── paper_replication/
-        └── journal.pone.0347873.s002.rar
+    └── official_stats19/
+        ├── dft-road-casualty-statistics-collision-last-5-years.csv
+        ├── dft-road-casualty-statistics-vehicle-last-5-years.csv
+        └── dft-road-casualty-statistics-casualty-last-5-years.csv
 ```
 
 ### 3. Run the Pipeline
@@ -81,14 +79,14 @@ Execute the end-to-end data pipeline from the project root:
 python run_pipeline.py
 ```
 
-This validates raw files, converts official and research CSVs into compressed Parquet files, creates the local DuckDB database (`data/processed/marg_drishti.duckdb`), and constructs validated analytical marts.
+This validates raw files, converts official CSVs into compressed Parquet files, creates the local DuckDB database (`data/processed/marg_drishti.duckdb`), and constructs validated analytical marts.
 
 ### 4. Run Automated Tests
 
 Execute the automated test suite:
 
 ```bash
-pytest
+python -m pytest -v
 ```
 
 ---
