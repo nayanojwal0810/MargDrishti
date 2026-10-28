@@ -8,9 +8,9 @@ An end-to-end road safety analytics platform that combines SQL-based data modell
 
 MargDrishti turns UK road-safety records into reliable analytical datasets, useful performance measures, and an interactive Power BI experience. It examines trends in reported collisions and serious outcomes, compares patterns across areas and road conditions, and evaluates whether a carefully validated model can support risk-adjusted benchmarking.
 
-## Planned dashboard
+## Dashboard
 
-The Power BI report will use a clear, multi-page layout with consistent navigation and focused analysis pages:
+The Power BI report will use a multi-page layout with consistent navigation and focused analysis pages, inspired by professional business intelligence reports.
 
 - **Home:** Project purpose and page navigation.
 - **Overview:** Key road-safety measures and trends over time.
@@ -25,7 +25,7 @@ The Power BI report will use a clear, multi-page layout with consistent navigati
 - SQL and DuckDB
 - Parquet
 - scikit-learn and traditional tree-based machine learning
-- Power BI and DAX
+- Microsoft Power BI and DAX
 - pytest
 
 ## Data
@@ -34,7 +34,7 @@ The project uses UK Department for Transport road-safety records and a published
 
 ## Project status
 
-The repository is being developed. Findings, evaluation results, and screenshots will be added after the relevant analyses and dashboard are implemented and checked.
+The project is under development. Findings, evaluation results, and dashboard screenshots will be added after the related analysis and implementation have been checked.
 
 ## Responsible interpretation
 
