@@ -77,13 +77,34 @@ class DatabaseManager:
         mart_count = self.con.execute("SELECT COUNT(*) FROM mart_collision_analytical").fetchone()[0]
         outcomes_count = self.con.execute("SELECT COUNT(*) FROM mart_collision_outcomes").fetchone()[0]
 
-        # 1. Key presence and validity (no NULL or blank collision_index)
-        blank_stg = self.con.execute("SELECT COUNT(*) FROM stg_collisions WHERE collision_index IS NULL OR TRIM(collision_index) = ''").fetchone()[0]
-        blank_veh_summary = self.con.execute("SELECT COUNT(*) FROM agg_vehicle_summary WHERE collision_index IS NULL OR TRIM(collision_index) = ''").fetchone()[0]
-        blank_cas_summary = self.con.execute("SELECT COUNT(*) FROM agg_casualty_summary WHERE collision_index IS NULL OR TRIM(collision_index) = ''").fetchone()[0]
-        blank_mart = self.con.execute("SELECT COUNT(*) FROM mart_collision_analytical WHERE collision_index IS NULL OR TRIM(collision_index) = ''").fetchone()[0]
-        blank_outcomes = self.con.execute("SELECT COUNT(*) FROM mart_collision_outcomes WHERE collision_index IS NULL OR TRIM(collision_index) = ''").fetchone()[0]
-        total_blank_keys = blank_stg + blank_veh_summary + blank_cas_summary + blank_mart + blank_outcomes
+        # 1. Key presence and validity (no NULL or blank keys)
+        blank_stg = self.con.execute("SELECT COUNT(*) FROM stg_collisions WHERE collision_index IS NULL OR TRIM(CAST(collision_index AS VARCHAR)) = ''").fetchone()[0]
+        blank_veh_summary = self.con.execute("SELECT COUNT(*) FROM agg_vehicle_summary WHERE collision_index IS NULL OR TRIM(CAST(collision_index AS VARCHAR)) = ''").fetchone()[0]
+        blank_cas_summary = self.con.execute("SELECT COUNT(*) FROM agg_casualty_summary WHERE collision_index IS NULL OR TRIM(CAST(collision_index AS VARCHAR)) = ''").fetchone()[0]
+        blank_mart = self.con.execute("SELECT COUNT(*) FROM mart_collision_analytical WHERE collision_index IS NULL OR TRIM(CAST(collision_index AS VARCHAR)) = ''").fetchone()[0]
+        blank_outcomes = self.con.execute("SELECT COUNT(*) FROM mart_collision_outcomes WHERE collision_index IS NULL OR TRIM(CAST(collision_index AS VARCHAR)) = ''").fetchone()[0]
+
+        invalid_raw_veh = self.con.execute("""
+            SELECT COUNT(*) FROM raw_vehicles
+            WHERE collision_index IS NULL OR TRIM(CAST(collision_index AS VARCHAR)) = ''
+               OR vehicle_reference IS NULL OR TRIM(CAST(vehicle_reference AS VARCHAR)) = ''
+        """).fetchone()[0]
+
+        invalid_raw_cas = self.con.execute("""
+            SELECT COUNT(*) FROM raw_casualties
+            WHERE collision_index IS NULL OR TRIM(CAST(collision_index AS VARCHAR)) = ''
+               OR casualty_reference IS NULL OR TRIM(CAST(casualty_reference AS VARCHAR)) = ''
+        """).fetchone()[0]
+
+        total_blank_keys = (
+            blank_stg
+            + blank_veh_summary
+            + blank_cas_summary
+            + blank_mart
+            + blank_outcomes
+            + invalid_raw_veh
+            + invalid_raw_cas
+        )
 
         # 2. Key uniqueness across all tables
         dup_stg = self.con.execute("""
@@ -147,13 +168,19 @@ class DatabaseManager:
             WHERE c.collision_index IS NULL
         """).fetchone()[0]
 
-        # 5. Severity label and binary target consistency
+        # 5. Severity label and binary target consistency (NULL-safe evaluation)
         inconsistent_severities = self.con.execute("""
             SELECT COUNT(*) FROM stg_collisions
-            WHERE (collision_severity = 1 AND (is_fatal_or_serious != 1 OR collision_severity_name != 'Fatal'))
-               OR (collision_severity = 2 AND (is_fatal_or_serious != 1 OR collision_severity_name != 'Serious'))
-               OR (collision_severity = 3 AND (is_fatal_or_serious != 0 OR collision_severity_name != 'Slight'))
-               OR (collision_severity NOT IN (1, 2, 3) AND (is_fatal_or_serious IS NOT NULL OR collision_severity_name IS NOT NULL))
+            WHERE CASE
+                WHEN collision_severity = 1 THEN
+                    (is_fatal_or_serious IS DISTINCT FROM 1 OR collision_severity_name IS DISTINCT FROM 'Fatal')
+                WHEN collision_severity = 2 THEN
+                    (is_fatal_or_serious IS DISTINCT FROM 1 OR collision_severity_name IS DISTINCT FROM 'Serious')
+                WHEN collision_severity = 3 THEN
+                    (is_fatal_or_serious IS DISTINCT FROM 0 OR collision_severity_name IS DISTINCT FROM 'Slight')
+                ELSE
+                    (is_fatal_or_serious IS NOT NULL OR collision_severity_name IS NOT NULL)
+            END
         """).fetchone()[0]
 
         # 6. Strict exclusion of casualty outcomes from the analytical mart
@@ -228,6 +255,8 @@ class DatabaseManager:
             "row_count_preserved": row_count_preserved,
             "summary_coverage_complete": summary_coverage_complete,
             "total_blank_keys": total_blank_keys,
+            "invalid_raw_vehicle_keys": invalid_raw_veh,
+            "invalid_raw_casualty_keys": invalid_raw_cas,
             "unmatched_veh_summary": unmatched_veh_summary,
             "unmatched_cas_summary": unmatched_cas_summary,
             "duplicate_stg_keys": dup_stg,

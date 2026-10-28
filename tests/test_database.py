@@ -240,3 +240,132 @@ def test_summary_row_completeness_and_key_validity(converted_db):
     assert integrity["veh_summary_count"] == integrity["stg_collisions_count"]
     assert integrity["cas_summary_count"] == integrity["stg_collisions_count"]
 
+
+def test_null_collision_severity_consistency(converted_db):
+    """Test that verify_integrity handles NULL and invalid severity codes with strict NULL safety."""
+    converted_db.con.execute("CREATE TABLE _stg_backup AS SELECT * FROM stg_collisions")
+
+    try:
+        # Case 1: NULL collision severity with NULL label and NULL target is treated as consistent
+        converted_db.con.execute("""
+            CREATE OR REPLACE VIEW stg_collisions AS
+            SELECT * EXCLUDE (collision_severity, collision_severity_name, is_fatal_or_serious),
+                   CAST(NULL AS INT) AS collision_severity,
+                   CAST(NULL AS VARCHAR) AS collision_severity_name,
+                   CAST(NULL AS INT) AS is_fatal_or_serious
+            FROM _stg_backup
+        """)
+        integrity = converted_db.verify_integrity()
+        assert integrity["inconsistent_severities"] == 0
+
+        # Case 2: NULL collision severity with non-NULL target (e.g. 1) is detected as inconsistent
+        converted_db.con.execute("""
+            CREATE OR REPLACE VIEW stg_collisions AS
+            SELECT * EXCLUDE (collision_severity, collision_severity_name, is_fatal_or_serious),
+                   CAST(NULL AS INT) AS collision_severity,
+                   CAST(NULL AS VARCHAR) AS collision_severity_name,
+                   1 AS is_fatal_or_serious
+            FROM _stg_backup
+        """)
+        integrity = converted_db.verify_integrity()
+        assert integrity["inconsistent_severities"] > 0
+        assert integrity["is_valid"] is False
+
+        # Case 3: NULL collision severity with non-NULL label (e.g. 'Fatal') is detected as inconsistent
+        converted_db.con.execute("""
+            CREATE OR REPLACE VIEW stg_collisions AS
+            SELECT * EXCLUDE (collision_severity, collision_severity_name, is_fatal_or_serious),
+                   CAST(NULL AS INT) AS collision_severity,
+                   'Fatal' AS collision_severity_name,
+                   CAST(NULL AS INT) AS is_fatal_or_serious
+            FROM _stg_backup
+        """)
+        integrity = converted_db.verify_integrity()
+        assert integrity["inconsistent_severities"] > 0
+        assert integrity["is_valid"] is False
+
+        # Case 4a: Invalid non-NULL severity code (e.g. 9) with NULL label and target is consistent
+        converted_db.con.execute("""
+            CREATE OR REPLACE VIEW stg_collisions AS
+            SELECT * EXCLUDE (collision_severity, collision_severity_name, is_fatal_or_serious),
+                   9 AS collision_severity,
+                   CAST(NULL AS VARCHAR) AS collision_severity_name,
+                   CAST(NULL AS INT) AS is_fatal_or_serious
+            FROM _stg_backup
+        """)
+        integrity = converted_db.verify_integrity()
+        assert integrity["inconsistent_severities"] == 0
+
+        # Case 4b: Invalid non-NULL severity code (e.g. 9) with non-NULL target (e.g. 0) is detected as inconsistent
+        converted_db.con.execute("""
+            CREATE OR REPLACE VIEW stg_collisions AS
+            SELECT * EXCLUDE (collision_severity, collision_severity_name, is_fatal_or_serious),
+                   9 AS collision_severity,
+                   CAST(NULL AS VARCHAR) AS collision_severity_name,
+                   0 AS is_fatal_or_serious
+            FROM _stg_backup
+        """)
+        integrity = converted_db.verify_integrity()
+        assert integrity["inconsistent_severities"] > 0
+        assert integrity["is_valid"] is False
+
+        # Case 4c: Invalid non-NULL severity code (e.g. 9) with non-NULL label (e.g. 'Other') is detected as inconsistent
+        converted_db.con.execute("""
+            CREATE OR REPLACE VIEW stg_collisions AS
+            SELECT * EXCLUDE (collision_severity, collision_severity_name, is_fatal_or_serious),
+                   9 AS collision_severity,
+                   'Other' AS collision_severity_name,
+                   CAST(NULL AS INT) AS is_fatal_or_serious
+            FROM _stg_backup
+        """)
+        integrity = converted_db.verify_integrity()
+        assert integrity["inconsistent_severities"] > 0
+        assert integrity["is_valid"] is False
+
+    finally:
+        converted_db.con.execute("CREATE OR REPLACE VIEW stg_collisions AS SELECT * FROM _stg_backup")
+        converted_db.con.execute("DROP TABLE IF EXISTS _stg_backup")
+
+
+def test_verify_integrity_detects_invalid_raw_child_keys(converted_db):
+    """Verify that DatabaseManager.verify_integrity catches blank or missing raw vehicle/casualty keys."""
+    base_integrity = converted_db.verify_integrity()
+    assert base_integrity["invalid_raw_vehicle_keys"] == 0
+    assert base_integrity["invalid_raw_casualty_keys"] == 0
+    assert base_integrity["total_blank_keys"] == 0
+    assert base_integrity["is_valid"] is True
+
+    pq_veh = str(converted_db.config.parquet_dir / "official_vehicle_2021_2025.parquet").replace("\\", "/")
+    pq_cas = str(converted_db.config.parquet_dir / "official_casualty_2021_2025.parquet").replace("\\", "/")
+
+    # 1. Test invalid vehicle key (blank vehicle_reference)
+    try:
+        converted_db.con.execute(f"""
+            CREATE OR REPLACE VIEW raw_vehicles AS
+            SELECT * EXCLUDE (vehicle_reference),
+                   CASE WHEN vehicle_reference = 1 THEN '   ' ELSE CAST(vehicle_reference AS VARCHAR) END AS vehicle_reference
+            FROM read_parquet('{pq_veh}')
+        """)
+        veh_integrity = converted_db.verify_integrity()
+        assert veh_integrity["invalid_raw_vehicle_keys"] > 0
+        assert veh_integrity["total_blank_keys"] > 0
+        assert veh_integrity["is_valid"] is False
+    finally:
+        converted_db.con.execute(f"CREATE OR REPLACE VIEW raw_vehicles AS SELECT * FROM read_parquet('{pq_veh}')")
+
+    # 2. Test invalid casualty key (blank collision_index)
+    try:
+        converted_db.con.execute(f"""
+            CREATE OR REPLACE VIEW raw_casualties AS
+            SELECT * EXCLUDE (collision_index),
+                   CASE WHEN casualty_reference = 1 THEN '' ELSE CAST(collision_index AS VARCHAR) END AS collision_index
+            FROM read_parquet('{pq_cas}')
+        """)
+        cas_integrity = converted_db.verify_integrity()
+        assert cas_integrity["invalid_raw_casualty_keys"] > 0
+        assert cas_integrity["total_blank_keys"] > 0
+        assert cas_integrity["is_valid"] is False
+    finally:
+        converted_db.con.execute(f"CREATE OR REPLACE VIEW raw_casualties AS SELECT * FROM read_parquet('{pq_cas}')")
+
+

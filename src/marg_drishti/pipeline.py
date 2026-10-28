@@ -74,6 +74,8 @@ def run_data_pipeline(
     print(f"  Row Count Preserved: {'YES' if integrity['row_count_preserved'] else 'NO'}")
     print(f"  Summary Coverage Complete: {'YES' if integrity['summary_coverage_complete'] else 'NO'}")
     print(f"  Total Blank / Missing Keys: {integrity['total_blank_keys']}")
+    print(f"  Invalid Raw Vehicle Keys: {integrity['invalid_raw_vehicle_keys']}")
+    print(f"  Invalid Raw Casualty Keys: {integrity['invalid_raw_casualty_keys']}")
     print(f"  Duplicate Keys in Analytical Mart: {integrity['duplicate_mart_keys']}")
     print(f"  Duplicate Keys in Vehicle Summary: {integrity['duplicate_vehicle_summary_keys']}")
     print(f"  Duplicate Keys in Casualty Summary: {integrity['duplicate_casualty_summary_keys']}")

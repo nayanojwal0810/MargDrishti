@@ -236,3 +236,77 @@ def test_validation_reports_sentinel_unknown_codes(synthetic_data_dir):
     # In our synthetic collision data, row 3 has speed_limit = -1
     assert report.sentinel_unknown_values["collision"]["speed_limit"] == 1
     assert any("speed_limit" in w for w in report.warnings)
+
+
+def test_validation_detects_invalid_or_blank_vehicle_reference(synthetic_data_dir):
+    """Ensure vehicle rows with NULL, empty, or whitespace-only vehicle_reference fail validation."""
+    veh_csv = synthetic_data_dir["veh_csv"]
+
+    with open(veh_csv, "r", encoding="utf-8") as f:
+        reader = list(csv.reader(f))
+    blank_ref_row = list(reader[1])
+    blank_ref_row[3] = "   "  # Whitespace-only vehicle_reference
+    with open(veh_csv, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(blank_ref_row)
+
+    config = PipelineConfig(base_dir=synthetic_data_dir["base_dir"])
+    validator = DataValidator(config)
+    report = validator.validate_csv_sources()
+    validator.close()
+
+    assert report.is_valid is False
+    assert report.invalid_vehicle_keys > 0
+    assert any("invalid or blank key records" in err and "vehicle" in err for err in report.errors)
+
+
+def test_validation_detects_invalid_or_blank_casualty_reference(synthetic_data_dir):
+    """Ensure casualty rows with NULL, empty, or whitespace-only casualty_reference fail validation."""
+    cas_csv = synthetic_data_dir["cas_csv"]
+
+    with open(cas_csv, "r", encoding="utf-8") as f:
+        reader = list(csv.reader(f))
+    blank_ref_row = list(reader[1])
+    blank_ref_row[4] = ""  # Empty casualty_reference
+    with open(cas_csv, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(blank_ref_row)
+
+    config = PipelineConfig(base_dir=synthetic_data_dir["base_dir"])
+    validator = DataValidator(config)
+    report = validator.validate_csv_sources()
+    validator.close()
+
+    assert report.is_valid is False
+    assert report.invalid_casualty_keys > 0
+    assert any("invalid or blank key records" in err and "casualty" in err for err in report.errors)
+
+
+def test_validation_detects_blank_collision_index_in_child_tables(synthetic_data_dir):
+    """Ensure vehicle or casualty rows with missing/blank collision_index fail validation."""
+    veh_csv = synthetic_data_dir["veh_csv"]
+    cas_csv = synthetic_data_dir["cas_csv"]
+
+    with open(veh_csv, "r", encoding="utf-8") as f:
+        v_reader = list(csv.reader(f))
+    blank_v_coll = list(v_reader[1])
+    blank_v_coll[0] = "  "  # Whitespace collision_index
+    with open(veh_csv, "a", newline="", encoding="utf-8") as f:
+        csv.writer(f).writerow(blank_v_coll)
+
+    with open(cas_csv, "r", encoding="utf-8") as f:
+        c_reader = list(csv.reader(f))
+    blank_c_coll = list(c_reader[1])
+    blank_c_coll[0] = ""  # Empty collision_index
+    with open(cas_csv, "a", newline="", encoding="utf-8") as f:
+        csv.writer(f).writerow(blank_c_coll)
+
+    config = PipelineConfig(base_dir=synthetic_data_dir["base_dir"])
+    validator = DataValidator(config)
+    report = validator.validate_csv_sources()
+    validator.close()
+
+    assert report.is_valid is False
+    assert report.invalid_vehicle_keys > 0
+    assert report.invalid_casualty_keys > 0
+
