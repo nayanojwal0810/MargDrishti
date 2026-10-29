@@ -398,3 +398,161 @@ def test_verify_integrity_detects_invalid_raw_child_keys(converted_db):
         converted_db.con.execute(f"CREATE OR REPLACE VIEW raw_casualties AS SELECT * FROM read_parquet('{pq_cas}')")
 
 
+def test_analytics_views_exist_and_reconcile_metrics(converted_db):
+    """Verify that all analytics views exist after build_database() and metrics reconcile."""
+    counts = converted_db.build_database()
+
+    assert "analytics_yearly_severity" in counts
+    assert "analytics_severity_by_road_context" in counts
+    assert "analytics_severity_by_vehicle_involvement" in counts
+    assert counts["analytics_yearly_severity"] > 0
+    assert counts["analytics_severity_by_road_context"] > 0
+    assert counts["analytics_severity_by_vehicle_involvement"] > 0
+
+    # Verify reconciliation rules on yearly severity view
+    rows = converted_db.con.execute("""
+        SELECT
+            collision_count,
+            known_severity_collision_count,
+            fatal_collision_count,
+            serious_collision_count,
+            slight_collision_count,
+            ksi_collision_count,
+            missing_or_invalid_severity_count,
+            ksi_collision_share_pct
+        FROM analytics_yearly_severity
+    """).fetchall()
+
+    for r in rows:
+        c_count, known_count, fatal, serious, slight, ksi, invalid_count, share = r
+        # fatal + serious + slight = known_severity_collision_count
+        assert fatal + serious + slight == known_count
+        # ksi_collision_count = fatal + serious
+        assert ksi == fatal + serious
+        # collision_count = known + invalid
+        assert c_count == known_count + invalid_count
+        if known_count > 0:
+            assert share == pytest.approx(ksi / known_count * 100.0, abs=0.01)
+        else:
+            assert share is None
+
+
+def test_analytics_yearly_severity_metrics(converted_db):
+    """Verify yearly severity metrics against the synthetic dataset."""
+    rows = converted_db.con.execute("""
+        SELECT
+            collision_year,
+            collision_count,
+            known_severity_collision_count,
+            fatal_collision_count,
+            serious_collision_count,
+            slight_collision_count,
+            ksi_collision_count,
+            missing_or_invalid_severity_count,
+            ksi_collision_share_pct
+        FROM analytics_yearly_severity
+        ORDER BY collision_year
+    """).fetchall()
+
+    # One row per year
+    years = [r[0] for r in rows]
+    assert years == [2021, 2022, 2023]
+    assert len(rows) == 3
+
+    # 2021: 3 collisions, 3 known, 1 fatal, 1 serious, 1 slight, 2 KSI, 0 missing/invalid, ~66.67% KSI share
+    r_2021 = rows[0]
+    assert r_2021[1] == 3
+    assert r_2021[2] == 3
+    assert r_2021[3] == 1
+    assert r_2021[4] == 1
+    assert r_2021[5] == 1
+    assert r_2021[6] == 2
+    assert r_2021[7] == 0
+    assert r_2021[8] == pytest.approx(66.67, abs=0.01)
+
+    # 2022: 1 collision, 1 known, 0 fatal, 0 serious, 1 slight, 0 KSI, 0 missing/invalid, 0% KSI share
+    r_2022 = rows[1]
+    assert r_2022[1] == 1
+    assert r_2022[2] == 1
+    assert r_2022[3] == 0
+    assert r_2022[4] == 0
+    assert r_2022[5] == 1
+    assert r_2022[6] == 0
+    assert r_2022[7] == 0
+    assert r_2022[8] == pytest.approx(0.0, abs=0.01)
+
+    # 2023: 2 collisions, 1 known, 0 fatal, 1 serious, 0 slight, 1 KSI, 1 missing/invalid, 100% KSI share
+    r_2023 = rows[2]
+    assert r_2023[1] == 2
+    assert r_2023[2] == 1
+    assert r_2023[3] == 0
+    assert r_2023[4] == 1
+    assert r_2023[5] == 0
+    assert r_2023[6] == 1
+    assert r_2023[7] == 1
+    assert r_2023[8] == pytest.approx(100.0, abs=0.01)
+
+
+def test_analytics_severity_by_road_context_metrics(converted_db):
+    """Verify road-context severity metrics, specifically road_type code 6 (Single carriageway)."""
+    row = converted_db.con.execute("""
+        SELECT
+            dimension_name,
+            dimension_code,
+            dimension_label,
+            collision_count,
+            known_severity_collision_count,
+            fatal_collision_count,
+            serious_collision_count,
+            slight_collision_count,
+            ksi_collision_count,
+            missing_or_invalid_severity_count,
+            ksi_collision_share_pct
+        FROM analytics_severity_by_road_context
+        WHERE dimension_name = 'road_type' AND dimension_code = '6'
+    """).fetchone()
+
+    assert row is not None
+    assert row[0] == "road_type"
+    assert row[1] == "6"
+    assert row[2] == "Single carriageway"
+    assert row[3] == 4  # collision_count
+    assert row[4] == 3  # known_severity_collision_count
+    assert row[5] == 1  # fatal_collision_count
+    assert row[6] == 1  # serious_collision_count
+    assert row[7] == 1  # slight_collision_count
+    assert row[8] == 2  # ksi_collision_count
+    assert row[9] == 1  # missing_or_invalid_severity_count
+    assert row[10] == pytest.approx(66.67, abs=0.01)
+
+
+def test_analytics_severity_by_vehicle_involvement_metrics(converted_db):
+    """Verify vehicle-involvement severity metrics, specifically pedal_cycle group."""
+    row = converted_db.con.execute("""
+        SELECT
+            vehicle_group,
+            collision_count,
+            known_severity_collision_count,
+            fatal_collision_count,
+            serious_collision_count,
+            slight_collision_count,
+            ksi_collision_count,
+            missing_or_invalid_severity_count,
+            ksi_collision_share_pct
+        FROM analytics_severity_by_vehicle_involvement
+        WHERE vehicle_group = 'pedal_cycle'
+    """).fetchone()
+
+    assert row is not None
+    assert row[0] == "pedal_cycle"
+    assert row[1] == 1  # collision_count
+    assert row[2] == 1  # known_severity_collision_count
+    assert row[3] == 0  # fatal_collision_count
+    assert row[4] == 0  # serious_collision_count
+    assert row[5] == 1  # slight_collision_count
+    assert row[6] == 0  # ksi_collision_count
+    assert row[7] == 0  # missing_or_invalid_severity_count
+    assert row[8] == pytest.approx(0.0, abs=0.01)
+
+
+

@@ -46,13 +46,14 @@ class DatabaseManager:
             "03_agg_vehicle_summary.sql",
             "04_agg_casualty_summary.sql",
             "05_marts.sql",
+            "06_analytics_views.sql",
         ]
 
         for sql_file in sql_files:
             file_path = self.config.sql_dir / sql_file
             self.execute_script(file_path, substitutions=substitutions)
 
-        # Gather row counts for all official tables and marts
+        # Gather row counts for all official tables, marts, and analytics views
         tables_to_check = [
             "raw_collisions",
             "raw_vehicles",
@@ -62,6 +63,9 @@ class DatabaseManager:
             "agg_casualty_summary",
             "mart_collision_analytical",
             "mart_collision_outcomes",
+            "analytics_yearly_severity",
+            "analytics_severity_by_road_context",
+            "analytics_severity_by_vehicle_involvement",
         ]
         counts = {}
         for tbl in tables_to_check:
