@@ -398,6 +398,38 @@ def test_verify_integrity_detects_invalid_raw_child_keys(converted_db):
         converted_db.con.execute(f"CREATE OR REPLACE VIEW raw_casualties AS SELECT * FROM read_parquet('{pq_cas}')")
 
 
+def _assert_severity_metrics_reconcile(con, view_name: str) -> None:
+    """Helper to verify severity reconciliation rules for every row in an analytics view."""
+    rows = con.execute(f"""
+        SELECT
+            collision_count,
+            known_severity_collision_count,
+            fatal_collision_count,
+            serious_collision_count,
+            slight_collision_count,
+            ksi_collision_count,
+            missing_or_invalid_severity_count,
+            ksi_collision_share_pct
+        FROM {view_name}
+    """).fetchall()
+
+    assert len(rows) > 0, f"{view_name} must contain data rows to test reconciliation"
+
+    for r in rows:
+        c_count, known_count, fatal, serious, slight, ksi, invalid_count, share = r
+        # 1. fatal + serious + slight == known_severity_collision_count
+        assert fatal + serious + slight == known_count
+        # 2. ksi_collision_count == fatal + serious
+        assert ksi == fatal + serious
+        # 3. collision_count == known_severity_collision_count + missing_or_invalid_severity_count
+        assert c_count == known_count + invalid_count
+        # 4 & 5. ksi_collision_share_pct calculation or None
+        if known_count > 0:
+            assert share == pytest.approx(ksi / known_count * 100.0, abs=0.01)
+        else:
+            assert share is None
+
+
 def test_analytics_views_exist_and_reconcile_metrics(converted_db):
     """Verify that all analytics views exist after build_database() and metrics reconcile."""
     counts = converted_db.build_database()
@@ -409,32 +441,13 @@ def test_analytics_views_exist_and_reconcile_metrics(converted_db):
     assert counts["analytics_severity_by_road_context"] > 0
     assert counts["analytics_severity_by_vehicle_involvement"] > 0
 
-    # Verify reconciliation rules on yearly severity view
-    rows = converted_db.con.execute("""
-        SELECT
-            collision_count,
-            known_severity_collision_count,
-            fatal_collision_count,
-            serious_collision_count,
-            slight_collision_count,
-            ksi_collision_count,
-            missing_or_invalid_severity_count,
-            ksi_collision_share_pct
-        FROM analytics_yearly_severity
-    """).fetchall()
-
-    for r in rows:
-        c_count, known_count, fatal, serious, slight, ksi, invalid_count, share = r
-        # fatal + serious + slight = known_severity_collision_count
-        assert fatal + serious + slight == known_count
-        # ksi_collision_count = fatal + serious
-        assert ksi == fatal + serious
-        # collision_count = known + invalid
-        assert c_count == known_count + invalid_count
-        if known_count > 0:
-            assert share == pytest.approx(ksi / known_count * 100.0, abs=0.01)
-        else:
-            assert share is None
+    analytics_views = [
+        "analytics_yearly_severity",
+        "analytics_severity_by_road_context",
+        "analytics_severity_by_vehicle_involvement",
+    ]
+    for view_name in analytics_views:
+        _assert_severity_metrics_reconcile(converted_db.con, view_name)
 
 
 def test_analytics_yearly_severity_metrics(converted_db):
