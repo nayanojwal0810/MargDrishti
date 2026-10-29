@@ -238,17 +238,37 @@ def test_validation_reports_sentinel_unknown_codes(synthetic_data_dir):
     assert any("speed_limit" in w for w in report.warnings)
 
 
-def test_validation_detects_invalid_or_blank_vehicle_reference(synthetic_data_dir):
-    """Ensure vehicle rows with NULL, empty, or whitespace-only vehicle_reference fail validation."""
+@pytest.mark.parametrize("field_name", ["collision_index", "vehicle_reference"])
+@pytest.mark.parametrize(
+    "invalid_val,case_desc",
+    [
+        (None, "missing_null"),        # Unquoted empty field in CSV -> parsed as SQL NULL
+        ("", "empty_string"),          # Quoted or empty string in CSV -> parsed as SQL NULL in DuckDB
+        ("   ", "whitespace_only"),    # Whitespace-only string -> parsed as VARCHAR, trimmed to empty
+    ],
+)
+def test_validation_detects_invalid_vehicle_keys(
+    synthetic_data_dir, field_name, invalid_val, case_desc
+):
+    """Ensure vehicle rows with missing/NULL, empty, or whitespace keys fail validation.
+
+    Note on DuckDB CSV parsing:
+    DuckDB's CSV auto-detector treats unquoted empty fields (None) and empty strings ("")
+    as SQL NULL. Whitespace strings ("   ") are read as VARCHAR and identified via
+    TRIM(CAST(... AS VARCHAR)) = ''. Both collision_index and vehicle_reference are validated.
+    """
     veh_csv = synthetic_data_dir["veh_csv"]
 
     with open(veh_csv, "r", encoding="utf-8") as f:
         reader = list(csv.reader(f))
-    blank_ref_row = list(reader[1])
-    blank_ref_row[3] = "   "  # Whitespace-only vehicle_reference
+    header = reader[0]
+    col_idx = header.index(field_name)
+
+    bad_row = list(reader[1])
+    bad_row[col_idx] = invalid_val
     with open(veh_csv, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(blank_ref_row)
+        writer.writerow(bad_row)
 
     config = PipelineConfig(base_dir=synthetic_data_dir["base_dir"])
     validator = DataValidator(config)
@@ -257,20 +277,42 @@ def test_validation_detects_invalid_or_blank_vehicle_reference(synthetic_data_di
 
     assert report.is_valid is False
     assert report.invalid_vehicle_keys > 0
+    assert report.invalid_casualty_keys == 0
     assert any("invalid or blank key records" in err and "vehicle" in err for err in report.errors)
+    assert any(field_name in err for err in report.errors)
 
 
-def test_validation_detects_invalid_or_blank_casualty_reference(synthetic_data_dir):
-    """Ensure casualty rows with NULL, empty, or whitespace-only casualty_reference fail validation."""
+@pytest.mark.parametrize("field_name", ["collision_index", "casualty_reference"])
+@pytest.mark.parametrize(
+    "invalid_val,case_desc",
+    [
+        (None, "missing_null"),        # Unquoted empty field in CSV -> parsed as SQL NULL
+        ("", "empty_string"),          # Quoted or empty string in CSV -> parsed as SQL NULL in DuckDB
+        ("   ", "whitespace_only"),    # Whitespace-only string -> parsed as VARCHAR, trimmed to empty
+    ],
+)
+def test_validation_detects_invalid_casualty_keys(
+    synthetic_data_dir, field_name, invalid_val, case_desc
+):
+    """Ensure casualty rows with missing/NULL, empty, or whitespace keys fail validation.
+
+    Note on DuckDB CSV parsing:
+    DuckDB's CSV auto-detector treats unquoted empty fields (None) and empty strings ("")
+    as SQL NULL. Whitespace strings ("   ") are read as VARCHAR and identified via
+    TRIM(CAST(... AS VARCHAR)) = ''. Both collision_index and casualty_reference are validated.
+    """
     cas_csv = synthetic_data_dir["cas_csv"]
 
     with open(cas_csv, "r", encoding="utf-8") as f:
         reader = list(csv.reader(f))
-    blank_ref_row = list(reader[1])
-    blank_ref_row[4] = ""  # Empty casualty_reference
+    header = reader[0]
+    col_idx = header.index(field_name)
+
+    bad_row = list(reader[1])
+    bad_row[col_idx] = invalid_val
     with open(cas_csv, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(blank_ref_row)
+        writer.writerow(bad_row)
 
     config = PipelineConfig(base_dir=synthetic_data_dir["base_dir"])
     validator = DataValidator(config)
@@ -279,34 +321,8 @@ def test_validation_detects_invalid_or_blank_casualty_reference(synthetic_data_d
 
     assert report.is_valid is False
     assert report.invalid_casualty_keys > 0
+    assert report.invalid_vehicle_keys == 0
     assert any("invalid or blank key records" in err and "casualty" in err for err in report.errors)
+    assert any(field_name in err for err in report.errors)
 
-
-def test_validation_detects_blank_collision_index_in_child_tables(synthetic_data_dir):
-    """Ensure vehicle or casualty rows with missing/blank collision_index fail validation."""
-    veh_csv = synthetic_data_dir["veh_csv"]
-    cas_csv = synthetic_data_dir["cas_csv"]
-
-    with open(veh_csv, "r", encoding="utf-8") as f:
-        v_reader = list(csv.reader(f))
-    blank_v_coll = list(v_reader[1])
-    blank_v_coll[0] = "  "  # Whitespace collision_index
-    with open(veh_csv, "a", newline="", encoding="utf-8") as f:
-        csv.writer(f).writerow(blank_v_coll)
-
-    with open(cas_csv, "r", encoding="utf-8") as f:
-        c_reader = list(csv.reader(f))
-    blank_c_coll = list(c_reader[1])
-    blank_c_coll[0] = ""  # Empty collision_index
-    with open(cas_csv, "a", newline="", encoding="utf-8") as f:
-        csv.writer(f).writerow(blank_c_coll)
-
-    config = PipelineConfig(base_dir=synthetic_data_dir["base_dir"])
-    validator = DataValidator(config)
-    report = validator.validate_csv_sources()
-    validator.close()
-
-    assert report.is_valid is False
-    assert report.invalid_vehicle_keys > 0
-    assert report.invalid_casualty_keys > 0
 
