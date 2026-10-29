@@ -85,7 +85,7 @@ SELECT
         WHEN 2 THEN 'Auto traffic signal'
         WHEN 3 THEN 'Stop sign'
         WHEN 4 THEN 'Give way or uncontrolled'
-        WHEN -1 THEN 'Missing / Uncontrolled'
+        WHEN -1 THEN 'Missing / Out of range'
         ELSE 'Unknown'
     END AS junction_control_name,
     

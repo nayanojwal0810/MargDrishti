@@ -228,6 +228,35 @@ def test_sentinel_values_handled_properly(converted_db):
     assert res[1] is None
 
 
+def test_junction_control_label_mapping(converted_db):
+    """Verify junction_control labels match official DfT STATS19 guidance.
+
+    Code -1 must receive 'Missing / Out of range' (not 'Missing / Uncontrolled'),
+    and code 4 must remain 'Give way or uncontrolled'.
+    """
+    rows = converted_db.con.execute("""
+        SELECT collision_index, junction_control, junction_control_name
+        FROM stg_collisions
+        ORDER BY collision_index
+    """).fetchall()
+
+    # Collision 1: junction_control = 4 -> 'Give way or uncontrolled'
+    c1 = rows[0]
+    assert c1[1] == 4
+    assert c1[2] == "Give way or uncontrolled"
+
+    # Collision 2: junction_control = -1 -> 'Missing / Out of range' (never 'Missing / Uncontrolled'!)
+    c2 = rows[1]
+    assert c2[1] == -1
+    assert c2[2] == "Missing / Out of range"
+    assert c2[2] != "Missing / Uncontrolled", "Code -1 must not be labelled as uncontrolled!"
+
+    # Collision 3: junction_control = 2 -> 'Auto traffic signal'
+    c3 = rows[2]
+    assert c3[1] == 2
+    assert c3[2] == "Auto traffic signal"
+
+
 def test_summary_row_completeness_and_key_validity(converted_db):
     """Verify that summary tables have 100% collision coverage with valid, non-blank keys."""
     integrity = converted_db.verify_integrity()
