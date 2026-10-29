@@ -24,6 +24,7 @@ IMPORTANT METHODOLOGICAL AND INTERPRETIVE NOTES:
   prevent target leakage and grouping bias.
 """
 
+import math
 from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
@@ -100,14 +101,22 @@ def format_feature_matrix(
 
 
 def is_valid_severity_code(val: Any) -> bool:
-    """Check if collision severity code is valid and known (1=Fatal, 2=Serious, 3=Slight)."""
-    if val is None or pd.isna(val):
+    """Check if collision severity code is valid and known (1=Fatal, 2=Serious, 3=Slight).
+    
+    Accepts exact integer codes (1, 2, 3) and exact representations (e.g. 1.0, '1', '2.0').
+    Rejects fractional values (e.g. 1.5, 2.5), booleans, NaN, infinities, and out-of-range values.
+    """
+    if val is None or isinstance(val, (bool, np.bool_)) or pd.isna(val):
         return False
     try:
-        val_int = int(val)
-        return val_int in (1, 2, 3)
+        f_val = float(val)
     except (ValueError, TypeError):
         return False
+
+    if not math.isfinite(f_val):
+        return False
+
+    return f_val in (1.0, 2.0, 3.0)
 
 
 def is_valid_authority_code(val: Any) -> bool:
@@ -215,7 +224,7 @@ def calculate_authority_benchmark(
     df_work["_oof_prob"] = np.nan
     df_work.loc[eligible_mask, "_oof_prob"] = oof_probabilities
     df_work["_is_ksi"] = df_work["collision_severity"].apply(
-        lambda s: 1 if is_valid_severity_code(s) and int(s) in (1, 2) else 0
+        lambda s: 1 if is_valid_severity_code(s) and int(float(s)) in (1, 2) else 0
     )
 
     # Filter for valid authority codes only
@@ -368,7 +377,7 @@ def run_severity_benchmark(
     # 3. Format features and extract binary target
     X_eligible = format_feature_matrix(eligible_df, BENCHMARK_FEATURES)
     y_eligible = eligible_df["collision_severity"].apply(
-        lambda s: 1 if int(s) in (1, 2) else 0
+        lambda s: 1 if int(float(s)) in (1, 2) else 0
     )
 
     # 4. Generate out-of-fold probabilities via stratified cross-validation

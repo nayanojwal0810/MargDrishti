@@ -38,19 +38,45 @@ def synthetic_mart_df(synthetic_data_dir):
 
 def test_severity_and_authority_validation_helpers():
     """Verify severity and authority code validation logic."""
-    # Valid severity codes
+    # Valid severity codes (exact representations)
     assert is_valid_severity_code(1) is True
     assert is_valid_severity_code(2) is True
     assert is_valid_severity_code(3) is True
     assert is_valid_severity_code("1") is True
+    assert is_valid_severity_code(1.0) is True
     assert is_valid_severity_code(2.0) is True
+    assert is_valid_severity_code("2.0") is True
+    assert is_valid_severity_code("3.0") is True
+    assert is_valid_severity_code(3.0) is True
 
-    # Invalid severity codes
+    # Fractional severity values must be rejected
+    assert is_valid_severity_code(1.5) is False
+    assert is_valid_severity_code(2.5) is False
+    assert is_valid_severity_code(3.5) is False
+    assert is_valid_severity_code("1.5") is False
+    assert is_valid_severity_code("2.5") is False
+    assert is_valid_severity_code("3.5") is False
+
+    # Booleans and infinite values must be rejected
+    assert is_valid_severity_code(True) is False
+    assert is_valid_severity_code(False) is False
+    assert is_valid_severity_code(np.bool_(True)) is False
+    assert is_valid_severity_code(np.bool_(False)) is False
+    assert is_valid_severity_code(float("inf")) is False
+    assert is_valid_severity_code(float("-inf")) is False
+    assert is_valid_severity_code("inf") is False
+    assert is_valid_severity_code("-inf") is False
+
+    # Out of range, missing, and non-numeric values
+    assert is_valid_severity_code(0) is False
+    assert is_valid_severity_code(4) is False
     assert is_valid_severity_code(9) is False
     assert is_valid_severity_code(-1) is False
+    assert is_valid_severity_code("-1") is False
     assert is_valid_severity_code(None) is False
     assert is_valid_severity_code(np.nan) is False
     assert is_valid_severity_code("") is False
+    assert is_valid_severity_code("   ") is False
     assert is_valid_severity_code("invalid") is False
 
     # Valid authority codes
@@ -239,6 +265,49 @@ def test_benchmark_reproducibility(synthetic_mart_df):
     assert np.allclose(probs1, probs2)
     pd.testing.assert_frame_equal(df1, df2)
     assert sum1["overall_metrics"] == sum2["overall_metrics"]
+
+
+def test_benchmarking_excludes_fractional_severity_record(synthetic_mart_df):
+    """Verify that records with fractional severity are excluded from fitting and do not alter KSI counts."""
+    # 1. Copy the synthetic DataFrame
+    df = synthetic_mart_df.copy()
+
+    # Capture baseline metrics for comparison
+    base_benchmark, _, _ = run_severity_benchmark(df, random_state=42)
+
+    # 2. Append a synthetic row copied from a valid collision
+    row = df.iloc[0].copy()
+    authority = row["local_authority_highway_current"]
+    base_auth_row = base_benchmark[base_benchmark["authority_code"] == authority].iloc[0]
+    expected_base_observed_ksi = base_auth_row["observed_ksi_count"]
+
+    # 3. Change its collision identifier to a unique synthetic value and its collision_severity to 1.5
+    row["collision_index"] = "SYNTH_FRAC_001"
+    row["collision_severity"] = 1.5
+
+    df_augmented = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+
+    # 4. Run run_severity_benchmark() on the augmented DataFrame
+    benchmark_df, summary, oof_probs = run_severity_benchmark(df_augmented, random_state=42)
+
+    # Assert that:
+    # - The fractional-severity row is excluded from model fitting
+    # - The eligible collision count remains 5
+    assert summary["record_counts"]["eligible_collision_count"] == 5
+    # - The missing/invalid severity count increases from 1 to 2
+    assert summary["record_counts"]["missing_or_invalid_severity_count"] == 2
+    # - The total collision record count is 7
+    assert summary["record_counts"]["total_collision_records"] == 7
+    # - The run completes successfully and produces finite out-of-fold probabilities for all eligible rows
+    assert len(oof_probs) == 5
+    assert np.all(np.isfinite(oof_probs))
+    assert np.all((oof_probs >= 0.0) & (oof_probs <= 1.0))
+    # - The invalid fractional row does not increase the observed KSI count for its authority
+    auth_row = benchmark_df[benchmark_df["authority_code"] == authority].iloc[0]
+    assert auth_row["observed_ksi_count"] == expected_base_observed_ksi
+    assert auth_row["collision_count"] == base_auth_row["collision_count"] + 1
+    assert auth_row["known_severity_collision_count"] == base_auth_row["known_severity_collision_count"]
+    assert auth_row["missing_or_invalid_severity_count"] == base_auth_row["missing_or_invalid_severity_count"] + 1
 
 
 def test_run_benchmark_cli_error_handling(tmp_path):
