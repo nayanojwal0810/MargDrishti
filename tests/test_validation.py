@@ -239,23 +239,15 @@ def test_validation_reports_sentinel_unknown_codes(synthetic_data_dir):
 
 
 @pytest.mark.parametrize("field_name", ["collision_index", "vehicle_reference"])
-@pytest.mark.parametrize(
-    "invalid_val,case_desc",
-    [
-        (None, "missing_null"),        # Unquoted empty field in CSV -> parsed as SQL NULL
-        ("", "empty_string"),          # Quoted or empty string in CSV -> parsed as SQL NULL in DuckDB
-        ("   ", "whitespace_only"),    # Whitespace-only string -> parsed as VARCHAR, trimmed to empty
-    ],
-)
+@pytest.mark.parametrize("invalid_val", ["", "   "])
 def test_validation_detects_invalid_vehicle_keys(
-    synthetic_data_dir, field_name, invalid_val, case_desc
+    synthetic_data_dir, field_name, invalid_val
 ):
-    """Ensure vehicle rows with missing/NULL, empty, or whitespace keys fail validation.
+    """Ensure vehicle rows with blank or whitespace-only keys fail validation.
 
-    Note on DuckDB CSV parsing:
-    DuckDB's CSV auto-detector treats unquoted empty fields (None) and empty strings ("")
-    as SQL NULL. Whitespace strings ("   ") are read as VARCHAR and identified via
-    TRIM(CAST(... AS VARCHAR)) = ''. Both collision_index and vehicle_reference are validated.
+    Covers blank CSV fields (parsed as SQL NULL by DuckDB under current CSV parsing)
+    and whitespace-only fields (detected via TRIM). Both collision_index and
+    vehicle_reference are validated.
     """
     veh_csv = synthetic_data_dir["veh_csv"]
 
@@ -283,23 +275,15 @@ def test_validation_detects_invalid_vehicle_keys(
 
 
 @pytest.mark.parametrize("field_name", ["collision_index", "casualty_reference"])
-@pytest.mark.parametrize(
-    "invalid_val,case_desc",
-    [
-        (None, "missing_null"),        # Unquoted empty field in CSV -> parsed as SQL NULL
-        ("", "empty_string"),          # Quoted or empty string in CSV -> parsed as SQL NULL in DuckDB
-        ("   ", "whitespace_only"),    # Whitespace-only string -> parsed as VARCHAR, trimmed to empty
-    ],
-)
+@pytest.mark.parametrize("invalid_val", ["", "   "])
 def test_validation_detects_invalid_casualty_keys(
-    synthetic_data_dir, field_name, invalid_val, case_desc
+    synthetic_data_dir, field_name, invalid_val
 ):
-    """Ensure casualty rows with missing/NULL, empty, or whitespace keys fail validation.
+    """Ensure casualty rows with blank or whitespace-only keys fail validation.
 
-    Note on DuckDB CSV parsing:
-    DuckDB's CSV auto-detector treats unquoted empty fields (None) and empty strings ("")
-    as SQL NULL. Whitespace strings ("   ") are read as VARCHAR and identified via
-    TRIM(CAST(... AS VARCHAR)) = ''. Both collision_index and casualty_reference are validated.
+    Covers blank CSV fields (parsed as SQL NULL by DuckDB under current CSV parsing)
+    and whitespace-only fields (detected via TRIM). Both collision_index and
+    casualty_reference are validated.
     """
     cas_csv = synthetic_data_dir["cas_csv"]
 
