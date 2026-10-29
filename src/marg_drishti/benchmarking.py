@@ -110,7 +110,7 @@ def is_valid_severity_code(val: Any) -> bool:
         return False
     try:
         f_val = float(val)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         return False
 
     if not math.isfinite(f_val):

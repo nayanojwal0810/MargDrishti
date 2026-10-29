@@ -78,6 +78,7 @@ def test_severity_and_authority_validation_helpers():
     assert is_valid_severity_code("") is False
     assert is_valid_severity_code("   ") is False
     assert is_valid_severity_code("invalid") is False
+    assert is_valid_severity_code(10**10000) is False
 
     # Valid authority codes
     assert is_valid_authority_code("E09000001") is True
