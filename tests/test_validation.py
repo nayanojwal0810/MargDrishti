@@ -18,6 +18,12 @@ def test_validation_passes_on_valid_synthetic_data(synthetic_data_dir):
     assert report.is_valid is True
     assert len(report.errors) == 0
     assert report.blank_collision_ids == 0
+    assert report.invalid_vehicle_keys == 0
+    assert report.invalid_vehicle_collision_index == 0
+    assert report.invalid_vehicle_reference == 0
+    assert report.invalid_casualty_keys == 0
+    assert report.invalid_casualty_collision_index == 0
+    assert report.invalid_casualty_reference == 0
     assert report.duplicate_collision_ids == 0
     assert report.duplicate_vehicle_keys == 0
     assert report.duplicate_casualty_keys == 0
@@ -270,8 +276,17 @@ def test_validation_detects_invalid_vehicle_keys(
     assert report.is_valid is False
     assert report.invalid_vehicle_keys > 0
     assert report.invalid_casualty_keys == 0
-    assert any("invalid or blank key records" in err and "vehicle" in err for err in report.errors)
-    assert any(field_name in err for err in report.errors)
+
+    if field_name == "collision_index":
+        assert report.invalid_vehicle_collision_index > 0
+        assert report.invalid_vehicle_reference == 0
+        expected_err = f"Found {report.invalid_vehicle_collision_index} missing or blank vehicle collision_index values."
+        assert expected_err in report.errors
+    else:
+        assert report.invalid_vehicle_reference > 0
+        assert report.invalid_vehicle_collision_index == 0
+        expected_err = f"Found {report.invalid_vehicle_reference} missing or blank vehicle_reference values."
+        assert expected_err in report.errors
 
 
 @pytest.mark.parametrize("field_name", ["collision_index", "casualty_reference"])
@@ -306,7 +321,16 @@ def test_validation_detects_invalid_casualty_keys(
     assert report.is_valid is False
     assert report.invalid_casualty_keys > 0
     assert report.invalid_vehicle_keys == 0
-    assert any("invalid or blank key records" in err and "casualty" in err for err in report.errors)
-    assert any(field_name in err for err in report.errors)
+
+    if field_name == "collision_index":
+        assert report.invalid_casualty_collision_index > 0
+        assert report.invalid_casualty_reference == 0
+        expected_err = f"Found {report.invalid_casualty_collision_index} missing or blank casualty collision_index values."
+        assert expected_err in report.errors
+    else:
+        assert report.invalid_casualty_reference > 0
+        assert report.invalid_casualty_collision_index == 0
+        expected_err = f"Found {report.invalid_casualty_reference} missing or blank casualty_reference values."
+        assert expected_err in report.errors
 
 

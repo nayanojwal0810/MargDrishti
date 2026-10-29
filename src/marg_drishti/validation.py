@@ -27,7 +27,11 @@ class ValidationReport:
     row_counts: Dict[str, int] = field(default_factory=dict)
     blank_collision_ids: int = 0
     invalid_vehicle_keys: int = 0
+    invalid_vehicle_collision_index: int = 0
+    invalid_vehicle_reference: int = 0
     invalid_casualty_keys: int = 0
+    invalid_casualty_collision_index: int = 0
+    invalid_casualty_reference: int = 0
     duplicate_collision_ids: int = 0
     duplicate_vehicle_keys: int = 0
     duplicate_casualty_keys: int = 0
@@ -43,6 +47,22 @@ class ValidationReport:
     sentinel_unknown_values: Dict[str, Dict[str, int]] = field(default_factory=dict)
     warnings: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
+
+    @property
+    def invalid_vehicle_collision_indices(self) -> int:
+        return self.invalid_vehicle_collision_index
+
+    @property
+    def invalid_vehicle_references(self) -> int:
+        return self.invalid_vehicle_reference
+
+    @property
+    def invalid_casualty_collision_indices(self) -> int:
+        return self.invalid_casualty_collision_index
+
+    @property
+    def invalid_casualty_references(self) -> int:
+        return self.invalid_casualty_reference
 
     def summary_text(self) -> str:
         """Render human-readable summary of validation results."""
@@ -60,8 +80,14 @@ class ValidationReport:
 
         lines.append("\nIntegrity & Key Constraints:")
         lines.append(f"  - Missing or blank collision identifiers: {self.blank_collision_ids}")
-        lines.append(f"  - Invalid or blank vehicle keys: {self.invalid_vehicle_keys}")
-        lines.append(f"  - Invalid or blank casualty keys: {self.invalid_casualty_keys}")
+        lines.append(
+            f"  - Invalid or blank vehicle keys: {self.invalid_vehicle_keys} "
+            f"(collision_index: {self.invalid_vehicle_collision_index}, vehicle_reference: {self.invalid_vehicle_reference})"
+        )
+        lines.append(
+            f"  - Invalid or blank casualty keys: {self.invalid_casualty_keys} "
+            f"(collision_index: {self.invalid_casualty_collision_index}, casualty_reference: {self.invalid_casualty_reference})"
+        )
         lines.append(f"  - Duplicate collision identifiers: {self.duplicate_collision_ids}")
         lines.append(f"  - Duplicate (collision, vehicle) keys: {self.duplicate_vehicle_keys}")
         lines.append(f"  - Duplicate (collision, casualty) keys: {self.duplicate_casualty_keys}")
@@ -172,15 +198,34 @@ class DataValidator:
             report.errors.append(f"Found {dup_count} duplicate collision_index records in collision table.")
 
         # 5. Vehicle key presence and non-blank check
-        invalid_veh_keys = self.con.execute(f"""
-            SELECT COUNT(*) FROM '{veh_path}'
-            WHERE collision_index IS NULL OR TRIM(CAST(collision_index AS VARCHAR)) = ''
-               OR vehicle_reference IS NULL OR TRIM(CAST(vehicle_reference AS VARCHAR)) = ''
-        """).fetchone()[0]
-        report.invalid_vehicle_keys = invalid_veh_keys
-        if invalid_veh_keys > 0:
+        veh_key_counts = self.con.execute(f"""
+            SELECT
+                COUNT(*) FILTER (
+                    WHERE collision_index IS NULL OR TRIM(CAST(collision_index AS VARCHAR)) = ''
+                       OR vehicle_reference IS NULL OR TRIM(CAST(vehicle_reference AS VARCHAR)) = ''
+                ) AS invalid_rows,
+                COUNT(*) FILTER (
+                    WHERE collision_index IS NULL OR TRIM(CAST(collision_index AS VARCHAR)) = ''
+                ) AS invalid_collision_index,
+                COUNT(*) FILTER (
+                    WHERE vehicle_reference IS NULL OR TRIM(CAST(vehicle_reference AS VARCHAR)) = ''
+                ) AS invalid_vehicle_reference
+            FROM '{veh_path}'
+        """).fetchone()
+        report.invalid_vehicle_keys = veh_key_counts[0]
+        report.invalid_vehicle_collision_index = veh_key_counts[1]
+        report.invalid_vehicle_reference = veh_key_counts[2]
+
+        if report.invalid_vehicle_collision_index > 0:
             report.is_valid = False
-            report.errors.append(f"Found {invalid_veh_keys} invalid or blank key records (collision_index or vehicle_reference) in vehicle table.")
+            report.errors.append(
+                f"Found {report.invalid_vehicle_collision_index} missing or blank vehicle collision_index values."
+            )
+        if report.invalid_vehicle_reference > 0:
+            report.is_valid = False
+            report.errors.append(
+                f"Found {report.invalid_vehicle_reference} missing or blank vehicle_reference values."
+            )
 
         # 6. Composite child key uniqueness in vehicle data: (collision_index, vehicle_reference)
         dup_veh_keys = self.con.execute(f"""
@@ -195,15 +240,34 @@ class DataValidator:
             report.errors.append(f"Found {dup_veh_keys} duplicate (collision_index, vehicle_reference) keys in vehicle table.")
 
         # 7. Casualty key presence and non-blank check
-        invalid_cas_keys = self.con.execute(f"""
-            SELECT COUNT(*) FROM '{cas_path}'
-            WHERE collision_index IS NULL OR TRIM(CAST(collision_index AS VARCHAR)) = ''
-               OR casualty_reference IS NULL OR TRIM(CAST(casualty_reference AS VARCHAR)) = ''
-        """).fetchone()[0]
-        report.invalid_casualty_keys = invalid_cas_keys
-        if invalid_cas_keys > 0:
+        cas_key_counts = self.con.execute(f"""
+            SELECT
+                COUNT(*) FILTER (
+                    WHERE collision_index IS NULL OR TRIM(CAST(collision_index AS VARCHAR)) = ''
+                       OR casualty_reference IS NULL OR TRIM(CAST(casualty_reference AS VARCHAR)) = ''
+                ) AS invalid_rows,
+                COUNT(*) FILTER (
+                    WHERE collision_index IS NULL OR TRIM(CAST(collision_index AS VARCHAR)) = ''
+                ) AS invalid_collision_index,
+                COUNT(*) FILTER (
+                    WHERE casualty_reference IS NULL OR TRIM(CAST(casualty_reference AS VARCHAR)) = ''
+                ) AS invalid_casualty_reference
+            FROM '{cas_path}'
+        """).fetchone()
+        report.invalid_casualty_keys = cas_key_counts[0]
+        report.invalid_casualty_collision_index = cas_key_counts[1]
+        report.invalid_casualty_reference = cas_key_counts[2]
+
+        if report.invalid_casualty_collision_index > 0:
             report.is_valid = False
-            report.errors.append(f"Found {invalid_cas_keys} invalid or blank key records (collision_index or casualty_reference) in casualty table.")
+            report.errors.append(
+                f"Found {report.invalid_casualty_collision_index} missing or blank casualty collision_index values."
+            )
+        if report.invalid_casualty_reference > 0:
+            report.is_valid = False
+            report.errors.append(
+                f"Found {report.invalid_casualty_reference} missing or blank casualty_reference values."
+            )
 
         # 8. Composite child key uniqueness in casualty data: (collision_index, casualty_reference)
         dup_cas_keys = self.con.execute(f"""
